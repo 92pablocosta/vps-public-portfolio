@@ -1,5 +1,7 @@
 # Production-Style VPS Infrastructure — Engineering Case Study
 
+**Live landing page: [https://pcvps.tech](https://pcvps.tech)**
+
 A public, sanitized case study of a single-node Ubuntu Server VPS running a
 containerized edge/application stack behind Traefik, plus a host-native AI
 agent under systemd, with monitoring, alerting, and an in-progress
