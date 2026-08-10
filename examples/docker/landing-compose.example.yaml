@@ -1,0 +1,36 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production file.
+#
+# Static landing page. The simplest stack, and the one used for the deliberate
+# failure test that validated the whole alerting chain
+# (stop -> DOWN alert -> start -> recovery alert).
+# -----------------------------------------------------------------------------
+services:
+  landing:
+    image: nginx:1.29.0-alpine        # pinned version, never :latest
+    container_name: landing
+    restart: unless-stopped
+
+    security_opt:
+      - no-new-privileges:true
+
+    volumes:
+      # Read-only bind mount: the web server has no reason to write its own
+      # document root. Open item recorded during the backup inventory — whether
+      # this content has an off-host source of record.
+      - ./html:/usr/share/nginx/html:ro
+
+    networks:
+      - proxy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.landing.rule=Host(`${LANDING_DOMAIN}`)"
+      - "traefik.http.routers.landing.entrypoints=websecure"
+      - "traefik.http.routers.landing.tls=true"
+      - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.landing.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    external: true

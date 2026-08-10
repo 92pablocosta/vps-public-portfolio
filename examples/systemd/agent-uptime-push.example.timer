@@ -1,0 +1,27 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production unit file.
+#
+# Heartbeat timer for a host-native service that exposes no HTTP endpoint and
+# therefore cannot be probed from outside.
+#
+# Install as: /etc/systemd/system/agent-uptime-push.timer
+# Enable with: sudo systemctl enable --now agent-uptime-push.timer
+# Verify with: systemctl list-timers agent-uptime-push.timer
+# -----------------------------------------------------------------------------
+[Unit]
+Description=Run the agent heartbeat push every minute
+
+[Timer]
+# First run one minute after boot, then every minute after each activation.
+OnBootSec=1min
+OnUnitActiveSec=1min
+
+# Allow systemd to batch the wakeup within 5s. Without this, systemd defaults to
+# a 1-minute accuracy window, which would make a 1-minute cadence unreliable.
+AccuracySec=5s
+
+# Catch up a missed window after downtime instead of silently skipping it.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

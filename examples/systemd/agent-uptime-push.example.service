@@ -1,0 +1,24 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production unit file.
+#
+# Oneshot unit invoked by agent-uptime-push.timer.
+#
+# Install as: /etc/systemd/system/agent-uptime-push.service
+#
+# Expected state: a Type=oneshot unit reports `inactive (dead)` between runs.
+# That is correct, not a fault. Judge it by the timer's next-elapse and by the
+# last invocation's exit status, not by whether it is currently "running".
+# -----------------------------------------------------------------------------
+[Unit]
+Description=Send an agent health heartbeat to the monitoring endpoint
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# The script is root-owned, mode 0750, and SECRET-BEARING: the push URL it
+# contains is itself a credential. It is excluded from version control, and its
+# contents were deliberately left unread during audits — file metadata was
+# sufficient to verify what needed verifying.
+ExecStart=/usr/local/bin/agent-uptime-push.sh

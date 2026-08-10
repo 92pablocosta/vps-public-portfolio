@@ -1,0 +1,47 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production file.
+#
+# Edge reverse proxy. The only stack that publishes host ports.
+# All real values are ${PLACEHOLDERS}; supply them outside version control.
+# -----------------------------------------------------------------------------
+services:
+  traefik:
+    # Pinned tag, never :latest — recovery must reproduce the running version.
+    # Open improvement: resolve to an immutable digest.
+    image: traefik:v3.7.1
+    container_name: traefik
+    restart: unless-stopped
+
+    security_opt:
+      # Blocks setuid/setgid privilege escalation inside the container.
+      - no-new-privileges:true
+
+    ports:
+      # The entire public HTTP surface of the host. Nothing else publishes.
+      - "80:80"    # ACME HTTP challenge + permanent redirect to HTTPS
+      - "443:443"
+
+    volumes:
+      # READ-ONLY socket mount: Traefik only needs to read container metadata.
+      # Note honestly: docker socket access remains root-equivalent in effect,
+      # so :ro reduces but does not remove this exposure. Treat the proxy as a
+      # privileged component.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Static configuration, mounted read-only.
+      - ./traefik.yaml:/etc/traefik/traefik.yaml:ro
+
+      # ACME store. SECRET-BEARING: contains account key and certificates.
+      # Never committed. Chmod 600. Backed up only through the encrypted path.
+      - ./acme/acme.json:/acme.json
+
+      - ./logs:/var/log/traefik
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    # External: the network is created and owned outside any Compose project,
+    # so stack lifecycles do not depend on the network's lifecycle.
+    external: true

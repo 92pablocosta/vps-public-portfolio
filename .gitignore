@@ -1,0 +1,109 @@
+# =============================================================================
+# Defensive .gitignore
+#
+# This repository is public and contains documentation and sanitized examples
+# only. Nothing operational, mutable, or secret-bearing may ever be committed.
+# This file reduces accidental additions. It is NOT a security control by
+# itself: human review and a secret scan remain mandatory before every commit.
+# =============================================================================
+
+# Environment and secret files
+.env
+.env.*
+*.env
+*.env.*
+*.secret
+*.secrets
+secrets/
+credentials/
+auth.json
+acme.json
+
+# Keys, certificates, and credential stores
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.jks
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+.ssh/
+.aws/
+.config/rclone/
+restic-password*
+.restic-password*
+restic-credentials*
+backblaze-credentials*
+b2-credentials*
+
+# Databases and mutable application state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*-wal
+*-shm
+volumes/
+docker-volumes/
+data/
+state/
+
+# Logs, journals, dumps, backups, and archives
+*.log
+logs/
+journal/
+*.dump
+*.sql
+*.bak
+*.backup
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+
+# Anything imported from the live host before review
+imports/
+raw/
+export/
+*.raw.*
+
+# Language and dependency artifacts
+node_modules/
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Infrastructure state and generated files
+*.tfstate
+*.tfstate.*
+.terraform/
+*.plan
+*.pid
+*.sock
+tmp/
+temp/
+cache/
+
+# Editor and operating-system metadata
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

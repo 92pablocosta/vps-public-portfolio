@@ -1,0 +1,58 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production file.
+#
+# Automation platform behind the reverse proxy.
+#
+# Deliberately absent: any `ports:` mapping. This service is reachable ONLY
+# through Traefik over the internal proxy network. Publishing a host port here
+# would bypass both the perimeter model and the proxy.
+# -----------------------------------------------------------------------------
+services:
+  n8n:
+    image: n8nio/n8n:2.33.7        # pinned version, never :latest
+    restart: unless-stopped
+
+    security_opt:
+      - no-new-privileges:true
+
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.n8n.rule=Host(`${N8N_DOMAIN}`)"
+      - traefik.http.routers.n8n.entrypoints=websecure
+      - traefik.http.routers.n8n.tls=true
+      - traefik.http.routers.n8n.tls.certresolver=letsencrypt
+      # Container port, resolved on the internal network — NOT a host port.
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+
+    environment:
+      - GENERIC_TIMEZONE=${TZ}
+      - TZ=${TZ}
+      - N8N_HOST=${N8N_DOMAIN}
+      - N8N_PROTOCOL=https
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
+      # Exactly one trusted proxy in front (Traefik). Getting this wrong makes
+      # the application misread client IPs from forwarded headers.
+      - N8N_PROXY_HOPS=1
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+
+    volumes:
+      # BACKUP-CRITICAL. This volume holds:
+      #   - a SQLite database in WAL mode (a naive .db copy during writes can
+      #     omit most of the live state — see docs/backup-strategy.md);
+      #   - a small config file containing the credential encryption key.
+      #
+      # Restoring the database WITHOUT that config file yields every workflow
+      # intact and every stored credential undecryptable, with no startup error.
+      # The key is not in an environment variable and not in this file.
+      - n8n_data:/home/node/.n8n
+
+    networks:
+      - proxy
+
+volumes:
+  n8n_data:
+
+networks:
+  proxy:
+    external: true

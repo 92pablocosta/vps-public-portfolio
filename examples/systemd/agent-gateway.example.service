@@ -1,0 +1,76 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production unit file.
+#
+# Host-native agent gateway. Paths and the account name are generic
+# placeholders; the real deployment paths are not published.
+#
+# Install as: /etc/systemd/system/agent-gateway.service
+# -----------------------------------------------------------------------------
+[Unit]
+Description=Agent gateway - messaging platform integration
+After=network-online.target
+Wants=network-online.target
+# Restart backoff is handled per-start below; no global start-rate limit so a
+# long-running service is never permanently wedged by a burst of restarts.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+
+# LEAST PRIVILEGE, enforced by the OS rather than by the agent's good behaviour:
+#   - a dedicated system account created only for this service;
+#   - no sudo access and no NOPASSWD entries anywhere for it;
+#   - NOT a member of the docker group; no access to the docker socket;
+#   - the administrator's SSH private keys are not present in this account;
+#   - the unit declares no listening port.
+User=${AGENT_USER}
+Group=${AGENT_GROUP}
+
+WorkingDirectory=${AGENT_HOME}
+ExecStart=${AGENT_HOME}/venv/bin/python -m agent_cli.main gateway run
+
+Environment="HOME=${AGENT_HOME}"
+Environment="AGENT_HOME=${AGENT_HOME}"
+Environment="VIRTUAL_ENV=${AGENT_HOME}/venv"
+Environment="PATH=${AGENT_HOME}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Secrets are NOT set here. systemd unit files are world-readable.
+# Use EnvironmentFile= pointing at a root-owned 0600 file, or a secret store.
+
+Restart=always
+RestartSec=5
+# Distinguish "asked to restart" from "told to stay down": an exit status the
+# application uses to signal a deliberate, permanent stop must not be retried.
+RestartForceExitStatus=75
+RestartPreventExitStatus=78
+
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=60
+ExecReload=/bin/kill -USR1 $MAINPID
+
+# Best-effort cleanup on stop. The leading '-' means a failure here does not
+# mark the unit failed — cleanup must never mask the real stop reason.
+ExecStopPost=-${AGENT_HOME}/venv/bin/python -m gateway.cleanup
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+# -----------------------------------------------------------------------------
+# Hardening directives worth adding when the workload allows them. They were not
+# all applicable to this service, and are listed as candidates rather than
+# claimed as deployed:
+#
+#   NoNewPrivileges=true
+#   ProtectSystem=strict
+#   ProtectHome=read-only
+#   PrivateTmp=true
+#   ProtectKernelTunables=true
+#   ProtectControlGroups=true
+#   RestrictSUIDSGID=true
+#   ReadWritePaths=${AGENT_HOME}
+#
+# Verify with: systemd-analyze security agent-gateway.service
+# -----------------------------------------------------------------------------

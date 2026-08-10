@@ -1,0 +1,51 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE — sanitized, educational. Not a production file.
+#
+# Traefik static configuration, mounted read-only into the container.
+#
+# NOTE: this file is NOT processed by Docker Compose, so ${PLACEHOLDER}
+# substitution does NOT happen automatically here. A deployment step must render
+# it. Validating that rendering mechanism is an open item — an unsubstituted
+# placeholder in a static config is a silent misconfiguration.
+# -----------------------------------------------------------------------------
+
+api:
+  dashboard: true
+  # Never true. `insecure: true` publishes the dashboard without auth on the
+  # entrypoint — an admin UI on the public edge with no operational upside.
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    # Opt-in routing: a container is only exposed if it explicitly carries
+    # traefik.enable=true. Defaulting to exposed is how services leak.
+    exposedByDefault: false
+    network: proxy
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: "/acme.json"
+      httpChallenge:
+        entryPoint: web
+
+log:
+  level: INFO
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
