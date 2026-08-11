@@ -7,9 +7,10 @@ containerized edge/application stack behind Traefik, plus a host-native AI
 agent under systemd, with monitoring, alerting, and an in-progress
 Disaster Recovery and encrypted backup design.
 
-> **This repository contains documentation and sanitized examples only.**
+> **This repository contains the public landing page source, documentation,
+> and sanitized examples.**
 > The real environment is operated from a separate private repository.
-> No hostnames, IP addresses, credentials, tokens, push URLs, keys, database
+> No private hostnames, IP addresses, credentials, tokens, push URLs, keys, database
 > files, or production paths appear here. Every configuration file in
 > `examples/` is an educational reconstruction using `${PLACEHOLDER}` values —
 > not a copy of a deployed file.
@@ -29,6 +30,24 @@ Disaster Recovery and encrypted backup design.
 | **Monitoring** | Uptime Kuma HTTP checks + a systemd-timer push heartbeat, alerting to a chat channel |
 | **Backups / DR** | Design complete, implementation **in progress**. Restic + Backblaze B2 **planned**. Restore test **not yet performed**. |
 | **Method** | AI-assisted engineering with human validation: `INSPECT → PLAN → CHANGE → VERIFY → DOCUMENT` |
+
+### Public site source
+
+The `site/` directory is the authoritative versioned source for the public VPS
+landing page:
+
+```text
+site/
+├── index.html
+├── styles.css
+├── script.js
+└── translations.js
+```
+
+The Git repository is the authoritative source; the live VPS static web root is
+a deployed runtime copy. The site uses static HTML, CSS, and vanilla JavaScript,
+with no framework or build step. It supports English and Brazilian Portuguese,
+browser-language detection, and a persisted manual EN/PT selection.
 
 ## 2. Why I built it
 
@@ -411,6 +430,7 @@ vps-public-portfolio/
 │   ├── systemd/                   Sanitized unit, drop-in, and timer examples
 │   ├── host/                      Sanitized SSH, UFW, sysctl, journald examples
 │   └── scripts/                   Sanitized heartbeat + pre-commit secret scan
+├── site/                          Authoritative public landing page source
 └── assets/
 ```
 

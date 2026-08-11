@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPS Infrastructure — Engineering Case Study</title>
+<meta name="description" content="A single-node Ubuntu VPS running a containerized stack behind Traefik, with host hardening, monitoring validated by a real failure test, and an in-progress backup/DR design. Built with AI assistance under human validation.">
+<meta name="color-scheme" content="dark light">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f1319'/><path d='M8 20.5 14 11l4 6 2-3 4 6.5z' fill='none' stroke='%2352d0b0' stroke-width='2' stroke-linejoin='round'/></svg>">
+</head>
+<body>
+
+<a class="skip-link" href="#main" data-i18n="a11y.skip">Skip to content</a>
+
+<header class="site-header" id="siteHeader">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top" aria-label="VPS Infrastructure — back to top" data-i18n-aria-label="brand.aria">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        <span class="brand-title" data-i18n="brand.title">VPS Infrastructure</span>
+        <span class="brand-sub" data-i18n="brand.sub">Engineering case study</span>
+      </span>
+    </a>
+
+    <nav class="site-nav" aria-label="Section navigation" data-i18n-aria-label="nav.aria">
+      <ul>
+        <li><a href="#architecture" data-i18n="nav.architecture">Architecture</a></li>
+        <li><a href="#services" data-i18n="nav.services">Services</a></li>
+        <li><a href="#security" data-i18n="nav.security">Security</a></li>
+        <li><a href="#monitoring" data-i18n="nav.monitoring">Monitoring</a></li>
+        <li><a href="#backup" data-i18n="nav.backup">Backup &amp; DR</a></li>
+        <li><a href="#ai" data-i18n="nav.ai">AI method</a></li>
+        <li><a href="#validation" data-i18n="nav.validation">Validation</a></li>
+        <li><a href="#status" data-i18n="nav.status">Status</a></li>
+      </ul>
+    </nav>
+
+    <a class="btn btn-sm btn-ghost header-cta" href="https://github.com/92pablocosta/vps-public-portfolio" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.36-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.19c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span data-i18n="nav.repo">Repository</span>
+    </a>
+
+    <div class="lang-switch" id="langSwitch" role="group" aria-label="Language" data-i18n-aria-label="lang.groupLabel">
+      <button class="lang-btn" type="button" data-lang="en" aria-pressed="true"
+              aria-label="Switch to English" data-i18n-aria-label="lang.toEn">EN</button>
+      <span class="lang-sep" aria-hidden="true">|</span>
+      <button class="lang-btn" type="button" data-lang="pt-BR" aria-pressed="false"
+              aria-label="Mudar para português (Brasil)" data-i18n-aria-label="lang.toPt">PT</button>
+    </div>
+
+    <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="mobileNav" aria-label="Open navigation menu">
+      <span class="nav-toggle-bars" aria-hidden="true"></span>
+    </button>
+  </div>
+
+  <nav class="mobile-nav" id="mobileNav" aria-label="Section navigation (mobile)" data-i18n-aria-label="nav.ariaMobile" hidden>
+    <ul>
+      <li><a href="#architecture" data-i18n="nav.architecture">Architecture</a></li>
+      <li><a href="#services" data-i18n="nav.services">Services</a></li>
+      <li><a href="#security" data-i18n="nav.security">Security</a></li>
+      <li><a href="#monitoring" data-i18n="nav.monitoring">Monitoring</a></li>
+      <li><a href="#backup" data-i18n="nav.backup">Backup &amp; DR</a></li>
+      <li><a href="#ai" data-i18n="nav.ai">AI method</a></li>
+      <li><a href="#validation" data-i18n="nav.validation">Validation</a></li>
+      <li><a href="#status" data-i18n="nav.status">Status</a></li>
+      <li><a href="https://github.com/92pablocosta/vps-public-portfolio" target="_blank" rel="noopener noreferrer" data-i18n="nav.repoMobile">Public repository &#8599;</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+<!-- ───────────────────────────── HERO ───────────────────────────── -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <p class="eyebrow"><span class="dot" aria-hidden="true"></span> <span data-i18n="hero.eyebrow">Single-node Ubuntu Server 24.04 LTS &middot; Hostinger VPS</span></p>
+
+    <h1 data-i18n-html="hero.title">Production-style infrastructure,<br>built and audited in public.</h1>
+
+    <p class="lede" data-i18n-html="hero.lede">
+      A containerized edge/application stack behind Traefik, a host-native AI agent under
+      systemd, layered host hardening, and monitoring proven by a deliberate failure test.
+      Most of the engineering effort went into <strong>auditing and verification</strong>,
+      not installation — and the parts that are unfinished say so.
+    </p>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/92pablocosta/vps-public-portfolio" target="_blank" rel="noopener noreferrer">
+        <span data-i18n="hero.cta1">Read the full case study</span>
+        <span class="arrow" aria-hidden="true">&#8599;</span>
+      </a>
+      <a class="btn btn-ghost" href="#architecture" data-i18n="hero.cta2">See the architecture</a>
+    </div>
+
+    <dl class="hero-facts">
+      <div class="fact">
+        <dt data-i18n="hero.fact1.t">Public attack surface</dt>
+        <dd><span class="mono">22 &middot; 80 &middot; 443</span></dd>
+        <p data-i18n="hero.fact1.d">No application port published on the host.</p>
+      </div>
+      <div class="fact">
+        <dt data-i18n="hero.fact2.t">Edge</dt>
+        <dd>Traefik v3</dd>
+        <p data-i18n="hero.fact2.d">TLS termination, ACME, HTTP&nbsp;&rarr; HTTPS redirect.</p>
+      </div>
+      <div class="fact">
+        <dt data-i18n="hero.fact3.t">Agent privilege</dt>
+        <dd data-i18n="hero.fact3.v">No sudo, no Docker</dd>
+        <p data-i18n="hero.fact3.d">Blast radius bounded by Unix permissions.</p>
+      </div>
+      <div class="fact">
+        <dt data-i18n="hero.fact4.t">Method</dt>
+        <dd class="mono small" data-i18n-html="hero.fact4.v">INSPECT&nbsp;&rarr; PLAN&nbsp;&rarr; CHANGE&nbsp;&rarr; VERIFY&nbsp;&rarr; DOCUMENT</dd>
+        <p data-i18n="hero.fact4.d">AI-assisted engineering with human validation.</p>
+      </div>
+    </dl>
+
+    <p class="hero-note" data-i18n-html="hero.note">
+      <strong>Scope note.</strong> Backups and Disaster Recovery are designed but
+      <em>not yet implemented or restore-tested</em>. Nothing on this page is claimed
+      before it is true — see <a href="#status">current status</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── ARCHITECTURE ───────────────────────── -->
+<section class="section" id="architecture" aria-labelledby="architecture-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="arch.kicker">01 &mdash; System</p>
+      <h2 id="architecture-h" data-i18n="arch.h">Architecture</h2>
+      <p class="section-lede" data-i18n="arch.lede">
+        Every request enters through the same door. Application containers publish nothing
+        on the host; they are reachable exclusively through the reverse proxy over an
+        internal Docker network.
+      </p>
+    </header>
+
+    <div class="diagram" role="img" data-i18n-aria-label="arch.diagramAria" aria-label="Request flow: Internet passes the provider firewall and UFW, which allows only ports 22, 80 and 443. Port 22 reaches OpenSSH with key-only authentication and a Fail2ban jail. Ports 80 and 443 reach Traefik v3, which terminates TLS and routes over an internal Docker network to the nginx landing page, n8n and Uptime Kuma. Separately, a systemd timer runs the Hermes agent and pushes a heartbeat to Uptime Kuma.">
+      <div class="flow">
+
+        <div class="flow-col">
+          <div class="node node-net">
+            <span class="node-kind" data-i18n="arch.n.publicKind">Public</span>
+            <span class="node-name" data-i18n="arch.n.internet">Internet</span>
+          </div>
+        </div>
+
+        <div class="flow-link"><span class="flow-label" data-i18n="arch.inbound">inbound</span></div>
+
+        <div class="flow-col">
+          <div class="zone zone-edge">
+            <p class="zone-title" data-i18n="arch.z.perimeter">Perimeter</p>
+            <div class="node">
+              <span class="node-kind" data-i18n="arch.n.providerKind">Provider</span>
+              <span class="node-name" data-i18n="arch.n.cloudFw">Cloud firewall</span>
+            </div>
+            <div class="node">
+              <span class="node-kind" data-i18n="arch.n.hostKind">Host</span>
+              <span class="node-name">UFW</span>
+              <span class="node-desc" data-i18n="arch.n.ufwDesc">default deny inbound &amp; forward</span>
+            </div>
+            <p class="zone-foot mono" data-i18n="arch.z.perimeterFoot">allow 22 &middot; 80 &middot; 443 only</p>
+          </div>
+        </div>
+
+        <div class="flow-link flow-split">
+          <span class="flow-label mono">22/tcp</span>
+          <span class="flow-label mono">80 &middot; 443/tcp</span>
+        </div>
+
+        <div class="flow-col">
+          <div class="zone zone-host">
+            <p class="zone-title">Ubuntu Server VPS</p>
+
+            <div class="node node-ssh">
+              <span class="node-kind" data-i18n="arch.n.accessKind">Access</span>
+              <span class="node-name">OpenSSH</span>
+              <span class="node-desc" data-i18n="arch.n.sshDesc">key-only auth &middot; Fail2ban jail</span>
+            </div>
+
+            <div class="zone zone-docker">
+              <p class="zone-title">Docker</p>
+              <div class="node node-proxy">
+                <span class="node-kind" data-i18n="arch.n.edgeKind">Edge</span>
+                <span class="node-name">Traefik v3</span>
+                <span class="node-desc" data-i18n="arch.n.traefikDesc">TLS termination &middot; ACME &middot; publishes host 80/443</span>
+              </div>
+              <div class="zone zone-net">
+                <p class="zone-title mono" data-i18n="arch.z.network">network: proxy &mdash; internal, IPv4</p>
+                <div class="node-row">
+                  <div class="node node-app">
+                    <span class="node-kind" data-i18n="arch.n.webKind">Web</span>
+                    <span class="node-name">nginx</span>
+                    <span class="node-desc" data-i18n="arch.n.nginxDesc">landing page</span>
+                  </div>
+                  <div class="node node-app">
+                    <span class="node-kind" data-i18n="arch.n.autoKind">Automation</span>
+                    <span class="node-name">n8n</span>
+                    <span class="node-desc" data-i18n="arch.n.n8nDesc">SQLite + encryption key</span>
+                  </div>
+                  <div class="node node-app">
+                    <span class="node-kind" data-i18n="arch.n.monKind">Monitoring</span>
+                    <span class="node-name">Uptime Kuma</span>
+                    <span class="node-desc">SQLite</span>
+                  </div>
+                </div>
+                <p class="zone-foot" data-i18n="arch.z.noPorts">no host port publication</p>
+              </div>
+            </div>
+
+            <div class="zone zone-systemd">
+              <p class="zone-title" data-i18n="arch.z.systemd">systemd &mdash; host-native</p>
+              <div class="node-row">
+                <div class="node node-agent">
+                  <span class="node-kind" data-i18n="arch.n.agentKind">Agent</span>
+                  <span class="node-name">Hermes</span>
+                  <span class="node-desc" data-i18n="arch.n.hermesDesc">dedicated unprivileged user &middot; no sudo &middot; no Docker socket &middot; no listener</span>
+                </div>
+                <div class="node node-timer">
+                  <span class="node-kind" data-i18n="arch.n.timerKind">Timer</span>
+                  <span class="node-name" data-i18n="arch.n.heartbeat">Heartbeat</span>
+                  <span class="node-desc" data-i18n-html="arch.n.heartbeatDesc">every 60s &rarr; pushes to Uptime Kuma only while the gateway is active</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="callout-grid">
+      <li class="callout">
+        <h3 data-i18n="arch.c1.h">One door, one owner of TLS</h3>
+        <p data-i18n-html="arch.c1.p">Adding a service means adding Traefik labels, not opening a host port. The Traefik dashboard is not publicly exposed and <span class="mono">insecure</span> is off.</p>
+      </li>
+      <li class="callout">
+        <h3 data-i18n="arch.c2.h">Read-only Docker socket</h3>
+        <p data-i18n="arch.c2.p">Traefik only needs to read container metadata. Read-only mounting limits — but does not eliminate — the blast radius; socket access is still privileged and treated as such.</p>
+      </li>
+      <li class="callout">
+        <h3 data-i18n="arch.c3.h">The agent sits beside Docker</h3>
+        <p data-i18n-html="arch.c3.p">Not inside it. It declares no listener, holds no admin SSH keys, and is not in the <span class="mono">docker</span> group.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ─────────────────────────── SERVICES ─────────────────────────── -->
+<section class="section section-alt" id="services" aria-labelledby="services-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="svc.kicker">02 &mdash; Workloads</p>
+      <h2 id="services-h" data-i18n="svc.h">What is running</h2>
+      <p class="section-lede" data-i18n="svc.lede">Four components, each with a stated job and a stated boundary.</p>
+    </header>
+
+    <div class="card-grid">
+      <article class="card">
+        <div class="card-top">
+          <h3>Traefik v3</h3>
+          <span class="badge badge-ok" data-i18n="badge.operational">Operational</span>
+        </div>
+        <p class="card-role" data-i18n="svc.traefik.role">Reverse proxy &middot; TLS &middot; routing</p>
+        <p data-i18n="svc.traefik.p">Terminates TLS with ACME certificates, redirects HTTP to HTTPS, and routes to containers by Docker label. The only container publishing ports on the host.</p>
+        <ul class="chips">
+          <li data-i18n="svc.traefik.chip1">Docker provider</li>
+          <li>ACME</li>
+          <li class="mono">no-new-privileges</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <h3>nginx</h3>
+          <span class="badge badge-ok" data-i18n="badge.operational">Operational</span>
+        </div>
+        <p class="card-role" data-i18n="svc.nginx.role">Static landing page</p>
+        <p data-i18n="svc.nginx.p">The public entry point, and the workload used for the deliberate failure test that validated the alerting chain end to end.</p>
+        <ul class="chips">
+          <li data-i18n="svc.nginx.chip1">static</li>
+          <li data-i18n="svc.nginx.chip2">proxy network only</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <h3>n8n</h3>
+          <span class="badge badge-ok" data-i18n="badge.operational">Operational</span>
+        </div>
+        <p class="card-role" data-i18n="svc.n8n.role">Automation orchestration</p>
+        <p data-i18n-html="svc.n8n.p">Holds real credentials, so it is the stateful component that drives the backup design. Monitored on its <span class="mono">/healthz/readiness</span> endpoint — usability, not "the process exists".</p>
+        <ul class="chips">
+          <li>SQLite (WAL)</li>
+          <li data-i18n="svc.n8n.chip2">encryption key in volume</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <div class="card-top">
+          <h3>Uptime Kuma</h3>
+          <span class="badge badge-ok" data-i18n="badge.operational">Operational</span>
+        </div>
+        <p class="card-role" data-i18n="svc.kuma.role">Health monitoring &amp; alerting</p>
+        <p data-i18n="svc.kuma.p">HTTP checks against the public endpoints plus a push monitor for the host-native agent. Alerts go to a chat channel via a bot deliberately separate from the agent's.</p>
+        <ul class="chips">
+          <li>SQLite</li>
+          <li data-i18n="svc.kuma.chip2">push + HTTP monitors</li>
+        </ul>
+      </article>
+
+      <article class="card card-wide">
+        <div class="card-top">
+          <h3 data-i18n="svc.hermes.h">Hermes agent</h3>
+          <span class="badge badge-ok" data-i18n="badge.operational">Operational</span>
+        </div>
+        <p class="card-role" data-i18n="svc.hermes.role">Host-native AI agent under systemd, with constrained Unix privileges</p>
+        <p data-i18n-html="svc.hermes.p">
+          Runs as its own dedicated user managed by systemd — <strong>not</strong> as root and
+          <strong>not</strong> inside Docker. It has no sudo rights, no <span class="mono">docker</span> group
+          membership, no access to the Docker socket, no copy of the administrator's SSH keys,
+          and no publicly exposed port. Its liveness is proven by an external heartbeat rather
+          than self-reporting: a systemd timer checks every 60&nbsp;seconds whether the gateway
+          unit is actually active, and pushes only when it is.
+        </p>
+        <ul class="chips">
+          <li data-i18n="svc.hermes.chip1">dedicated user</li>
+          <li data-i18n="svc.hermes.chip2">no sudo</li>
+          <li data-i18n="svc.hermes.chip3">no Docker socket</li>
+          <li data-i18n="svc.hermes.chip4">no listener</li>
+          <li data-i18n="svc.hermes.chip5">systemd-managed</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── SECURITY ─────────────────────────── -->
+<section class="section" id="security" aria-labelledby="security-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="sec.kicker">03 &mdash; Hardening</p>
+      <h2 id="security-h" data-i18n="sec.h">Security model</h2>
+      <p class="section-lede" data-i18n="sec.lede">
+        Layered, and each layer validated independently rather than assumed. The controls
+        below were confirmed active against the running system, not merely written into files.
+      </p>
+    </header>
+
+    <div class="layer-grid">
+      <section class="layer" aria-labelledby="layer-perimeter">
+        <h3 id="layer-perimeter"><span class="layer-num">01</span> <span data-i18n="sec.l1.h">Perimeter</span></h3>
+        <ul class="ticks">
+          <li data-i18n="sec.l1.i1">Provider firewall in front of the host</li>
+          <li data-i18n="sec.l1.i2">UFW: default deny inbound, default deny forward</li>
+          <li data-i18n="sec.l1.i3">IPv6 handling explicitly enabled, so IPv6 is not an unexamined blind spot</li>
+          <li data-i18n="sec.l1.i4">Only 22, 80 and 443 reachable from the internet</li>
+        </ul>
+      </section>
+
+      <section class="layer" aria-labelledby="layer-access">
+        <h3 id="layer-access"><span class="layer-num">02</span> <span data-i18n="sec.l2.h">Access</span></h3>
+        <ul class="ticks">
+          <li data-i18n="sec.l2.i1">SSH public-key authentication only</li>
+          <li data-i18n="sec.l2.i2">Root login, password auth, keyboard-interactive and empty passwords disabled</li>
+          <li data-i18n-html="sec.l2.i3">Reduced <span class="mono">MaxAuthTries</span> and <span class="mono">LoginGraceTime</span></li>
+          <li data-i18n="sec.l2.i4">Fail2ban jail active on the SSH service</li>
+        </ul>
+      </section>
+
+      <section class="layer" aria-labelledby="layer-host">
+        <h3 id="layer-host"><span class="layer-num">03</span> <span data-i18n="sec.l3.h">Host</span></h3>
+        <ul class="ticks">
+          <li data-i18n="sec.l3.i1">AppArmor and auditd enabled and active</li>
+          <li data-i18n="sec.l3.i2">journald with bounded retention</li>
+          <li data-i18n="sec.l3.i3">unattended-upgrades for security patching</li>
+          <li data-i18n="sec.l3.i4">sysctl network and kernel hardening, observed at runtime</li>
+        </ul>
+      </section>
+
+      <section class="layer" aria-labelledby="layer-priv">
+        <h3 id="layer-priv"><span class="layer-num">04</span> <span data-i18n="sec.l4.h">Privilege</span></h3>
+        <ul class="ticks">
+          <li data-i18n="sec.l4.i1">No passwordless sudo, for any user</li>
+          <li data-i18n-html="sec.l4.i2">Admin user deliberately <strong>not</strong> in the <span class="mono">docker</span> group — group membership is effectively passwordless root</li>
+          <li data-i18n-html="sec.l4.i3">Docker administration through interactive <span class="mono">sudo docker …</span>, so every privileged action is explicit</li>
+          <li data-i18n="sec.l4.i4">The AI agent has neither sudo nor Docker access</li>
+        </ul>
+      </section>
+
+      <section class="layer" aria-labelledby="layer-app">
+        <h3 id="layer-app"><span class="layer-num">05</span> <span data-i18n="sec.l5.h">Application</span></h3>
+        <ul class="ticks">
+          <li data-i18n="sec.l5.i1">Services isolated on an internal Docker network, IPv4-only, no host port publication</li>
+          <li data-i18n-html="sec.l5.i2"><span class="mono">no-new-privileges:true</span> on edge containers</li>
+          <li data-i18n-html="sec.l5.i3">Image tags pinned, never <span class="mono">latest</span></li>
+          <li data-i18n-html="sec.l5.i4">Secret-bearing files held at restrictive modes and excluded from Git by policy and by <span class="mono">.gitignore</span></li>
+        </ul>
+      </section>
+
+      <section class="layer layer-open" aria-labelledby="layer-open-h">
+        <h3 id="layer-open-h"><span class="layer-num">06</span> <span data-i18n="sec.l6.h">Stated openly</span></h3>
+        <ul class="ticks ticks-open">
+          <li data-i18n="sec.l6.i1">The Docker socket is privileged even when mounted read-only</li>
+          <li data-i18n="sec.l6.i2">Image tags are pinned but not yet resolved to immutable digests</li>
+          <li data-i18n="sec.l6.i3">Monitoring shares a host with its subject</li>
+          <li data-i18n="sec.l6.i4">No restore test has been performed</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────── MONITORING ────────────────────────── -->
+<section class="section section-alt" id="monitoring" aria-labelledby="monitoring-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="mon.kicker">04 &mdash; Reliability</p>
+      <h2 id="monitoring-h" data-i18n="mon.h">Monitoring &amp; alerting</h2>
+      <p class="section-lede" data-i18n="mon.lede">
+        Two complementary signals, and one blind spot that is documented rather than hidden.
+      </p>
+    </header>
+
+    <div class="split">
+      <article class="panel">
+        <p class="panel-kicker" data-i18n="mon.s1.kicker">Signal 1</p>
+        <h3 data-i18n="mon.s1.h">HTTP checks</h3>
+        <p data-i18n="mon.s1.p">
+          Uptime Kuma polls the public endpoints through the same path a user takes.
+          Alerts route to a chat channel using a bot deliberately separate from the AI
+          agent's bot, so a failure of the agent cannot silence alerting.
+        </p>
+        <p class="panel-note" data-i18n-html="mon.s1.note">
+          n8n is checked on <span class="mono">/healthz/readiness</span> rather than
+          <span class="mono">/healthz</span>: all three health paths return 200, and readiness
+          is the one that reflects usability.
+        </p>
+      </article>
+
+      <article class="panel">
+        <p class="panel-kicker" data-i18n="mon.s2.kicker">Signal 2</p>
+        <h3 data-i18n="mon.s2.h">Push heartbeat</h3>
+        <p data-i18n-html="mon.s2.p">
+          The host-native agent exposes no HTTP endpoint, so it cannot be polled. A systemd
+          timer fires every 60&nbsp;seconds, a oneshot unit checks whether the gateway service
+          is genuinely active, and pushes to Uptime Kuma <strong>only</strong> when it is.
+          A missing push raises an incident.
+        </p>
+        <p class="panel-note" data-i18n-html="mon.s2.note">
+          Verified live: timer enabled and waiting, last invocation exiting
+          <span class="mono">0/SUCCESS</span>, next firing scheduled, script present at
+          restrictive ownership and mode — contents deliberately left unread, because it is
+          secret-bearing.
+        </p>
+      </article>
+    </div>
+
+    <div class="proof">
+      <div class="proof-head">
+        <span class="badge badge-ok" data-i18n="badge.validated">Validated</span>
+        <h3 data-i18n="mon.proof.h">The alert was tested, not just configured</h3>
+      </div>
+      <ol class="steps">
+        <li><span class="step-n">1</span> <span data-i18n="mon.proof.s1">Landing container deliberately stopped</span></li>
+        <li><span class="step-n">2</span> <span data-i18n-html="mon.proof.s2">Uptime Kuma detected <span class="mono">DOWN</span></span></li>
+        <li><span class="step-n">3</span> <span data-i18n="mon.proof.s3">Alert delivered to the chat channel</span></li>
+        <li><span class="step-n">4</span> <span data-i18n="mon.proof.s4">Container restarted</span></li>
+        <li><span class="step-n">5</span> <span data-i18n="mon.proof.s5">Recovery alert delivered</span></li>
+      </ol>
+      <p class="proof-note" data-i18n-html="mon.proof.note">
+        The whole chain is validated against a real workload rather than against a config
+        file. Traefik's <span class="mono">/ping</span> was deliberately <em>not</em> enabled:
+        application endpoints already give a stronger signal, and enabling it would add
+        surface for no gain.
+      </p>
+    </div>
+
+    <aside class="notice notice-warn" aria-labelledby="blindspot-h">
+      <p class="notice-tag" data-i18n="mon.blind.tag">Known blind spot</p>
+      <h3 id="blindspot-h" data-i18n="mon.blind.h">Monitoring shares a host with its subject</h3>
+      <p data-i18n-html="mon.blind.p">
+        Uptime Kuma runs on the machine it watches, so it cannot alert on its own outage or
+        on total host loss. Independent external monitoring is an identified improvement —
+        <strong>not an implemented control.</strong>
+      </p>
+    </aside>
+  </div>
+</section>
+
+<!-- ──────────────────────── BACKUP &amp; DR ─────────────────────── -->
+<section class="section" id="backup" aria-labelledby="backup-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="dr.kicker">05 &mdash; Recoverability</p>
+      <h2 id="backup-h" data-i18n="dr.h">Backup &amp; Disaster Recovery</h2>
+      <p class="section-lede" data-i18n="dr.lede">
+        Design complete, implementation in progress. The honesty of this section is the
+        point: a backup is not done until a restore is tested, and that test has not
+        happened yet.
+      </p>
+    </header>
+
+    <div class="status-split">
+      <section class="status-col status-done" aria-labelledby="dr-done-h">
+        <h3 id="dr-done-h"><span class="badge badge-ok" data-i18n="badge.implemented">Implemented</span></h3>
+        <ul class="ticks">
+          <li data-i18n="dr.done.i1">Data classified before anything was backed up — critical mutable data, secret-bearing recovery material, reproducible configuration, operational docs, disposable runtime data</li>
+          <li data-i18n="dr.done.i2">Path-level backup inventory complete for the current plan</li>
+          <li data-i18n="dr.done.i3">Reproducible configuration under Git: Compose files, Traefik config, systemd units, host hardening, runbooks</li>
+          <li data-i18n="dr.done.i4">Clean-host bootstrap sequence documented with exact version pinning</li>
+          <li data-i18n="dr.done.i5">A local source patch to the agent preserved with its base commit and a verified SHA-256</li>
+          <li data-i18n="dr.done.i6">Current protection: provider-side snapshots only</li>
+        </ul>
+      </section>
+
+      <section class="status-col status-planned" aria-labelledby="dr-planned-h">
+        <h3 id="dr-planned-h"><span class="badge badge-plan" data-i18n="badge.plannedProgress">Planned / in progress</span></h3>
+        <ul class="ticks ticks-open">
+          <li data-i18n-html="dr.plan.i1"><strong>In progress</strong> — SQLite consistency mechanism, to be chosen and tested per application</li>
+          <li data-i18n-html="dr.plan.i2"><strong>Planned</strong> — Restic + Backblaze B2 implementation</li>
+          <li data-i18n-html="dr.plan.i3"><strong>Not performed</strong> — restore test on an isolated host, with recorded timings and evidence</li>
+          <li data-i18n-html="dr.plan.i4"><strong>Not measured</strong> — recovery objectives, which follow from that test rather than preceding it</li>
+          <li data-i18n-html="dr.plan.i5"><strong>Skeleton</strong> — DR runbook, promoted to runbook only after a successful restore</li>
+        </ul>
+      </section>
+    </div>
+
+    <div class="pipeline-wrap">
+      <div class="pipeline-head">
+        <h3 data-i18n="dr.pipe.h">Planned backup pipeline</h3>
+        <span class="badge badge-plan" data-i18n="badge.notImplemented">Not yet implemented</span>
+      </div>
+      <ol class="pipeline" role="list">
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.1i">Source</span><span class="pipe-t" data-i18n="dr.pipe.1t">Live SQLite</span><span class="pipe-d" data-i18n="dr.pipe.1d">n8n &middot; Uptime Kuma &middot; agent state</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.2i">Capture</span><span class="pipe-t" data-i18n="dr.pipe.2t">Consistent snapshot</span><span class="pipe-d" data-i18n="dr.pipe.2d">application-consistent, WAL-aware</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.3i">Stage</span><span class="pipe-t" data-i18n="dr.pipe.3t">Staging directory</span><span class="pipe-d" data-i18n="dr.pipe.3d">restrictive permissions, bounded lifetime</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.4i">Archive</span><span class="pipe-t">Restic</span><span class="pipe-d" data-i18n="dr.pipe.4d">encrypted, deduplicated</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.5i">Off-site</span><span class="pipe-t">Backblaze B2</span><span class="pipe-d" data-i18n="dr.pipe.5d">separate custody</span></li>
+        <li class="pipe-node pipe-gate"><span class="pipe-i" data-i18n="dr.pipe.6i">Gate</span><span class="pipe-t" data-i18n="dr.pipe.6t">Restore test</span><span class="pipe-d" data-i18n="dr.pipe.6d">until this passes, the rest is a plan</span></li>
+      </ol>
+    </div>
+
+    <div class="split">
+      <aside class="notice">
+        <p class="notice-tag" data-i18n="dr.wal.tag">Why a file copy would not have worked</p>
+        <p data-i18n-html="dr.wal.p">
+          Both application databases run SQLite in <strong>WAL mode</strong>, and at inspection
+          time each <span class="mono">-wal</span> file was <em>larger than its main database</em> —
+          for the automation platform, nearly three times larger. Copying the
+          <span class="mono">.db</span> alone during writes would not produce a slightly stale
+          backup; it would omit the majority of the live state. The inverse trap was recorded
+          too: some WAL files were 0&nbsp;bytes at inspection, and a design that assumes that
+          holds works right up until the first busy moment.
+        </p>
+      </aside>
+
+      <aside class="notice notice-key">
+        <p class="notice-tag" data-i18n="dr.key.tag">The recovery-blocking dependency</p>
+        <p data-i18n-html="dr.key.p">
+          The automation platform's stored credentials are encrypted with a key held in a small
+          config file <em>inside the volume</em> — not in an environment variable. A database
+          restored without that file comes back with every workflow intact and every credential
+          undecryptable. Finding this before building the backup, rather than during a recovery,
+          is the single highest-value result of the audit work.
+        </p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────── AI-ASSISTED ENGINEERING ───────────────── -->
+<section class="section section-alt" id="ai" aria-labelledby="ai-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="ai.kicker">06 &mdash; Method</p>
+      <h2 id="ai-h" data-i18n="ai.h">AI-assisted engineering, with human validation</h2>
+      <p class="section-lede" data-i18n="ai.lede">
+        This project was built with heavy AI assistance and deliberate human control. Both
+        halves are true, and stating only one of them would be dishonest.
+      </p>
+    </header>
+
+    <div class="loop" role="img" data-i18n-aria-label="ai.loopAria" aria-label="Engineering loop: the human defines the goal and constraints; an AI assistant investigates, drafts commands, reviews configuration and identifies risk; the human reviews the proposal for necessity, reversibility and breakage; if rejected it returns to the assistant; if approved the privileged step is run manually via interactive sudo; the result is verified against real system state, and a contradiction returns to the assistant; verified results are documented with evidence, decisions and open TODOs.">
+      <ol class="loop-steps">
+        <li class="loop-step">
+          <span class="loop-n">01</span>
+          <h3 data-i18n="ai.s1.h">Human</h3>
+          <p data-i18n="ai.s1.p">Defines the goal and the constraints.</p>
+        </li>
+        <li class="loop-step">
+          <span class="loop-n">02</span>
+          <h3 data-i18n="ai.s2.h">AI assistant</h3>
+          <p data-i18n="ai.s2.p">Investigates, drafts commands, reviews configuration, identifies risk.</p>
+        </li>
+        <li class="loop-step loop-gate">
+          <span class="loop-n">03</span>
+          <h3 data-i18n="ai.s3.h">Human review</h3>
+          <p data-i18n="ai.s3.p">Is it necessary? Is it reversible? What breaks?</p>
+          <p class="loop-reject" data-i18n-html="ai.s3.reject">Rejected or revised &rarr; back to step 02</p>
+        </li>
+        <li class="loop-step">
+          <span class="loop-n">04</span>
+          <h3 data-i18n="ai.s4.h">System</h3>
+          <p data-i18n-html="ai.s4.p">Privileged steps run manually via interactive <span class="mono">sudo</span>.</p>
+        </li>
+        <li class="loop-step">
+          <span class="loop-n">05</span>
+          <h3 data-i18n="ai.s5.h">Verification</h3>
+          <p data-i18n="ai.s5.p">Checked against real system state.</p>
+          <p class="loop-reject" data-i18n-html="ai.s5.reject">Contradicts expectation &rarr; back to step 02</p>
+        </li>
+        <li class="loop-step">
+          <span class="loop-n">06</span>
+          <h3 data-i18n="ai.s6.h">Documentation</h3>
+          <p data-i18n="ai.s6.p">Evidence, decisions, and open TODOs.</p>
+        </li>
+      </ol>
+    </div>
+
+    <blockquote class="quote">
+      <p data-i18n="ai.quote">Model output is an engineering aid or a hypothesis. It is never ground truth.</p>
+      <footer data-i18n="ai.quoteFoot">The operating rule the workflow exists to enforce — so that the system, not the model, gets the last word.</footer>
+    </blockquote>
+
+    <div class="split">
+      <article class="panel">
+        <h3 data-i18n="ai.did.aiH">What the AI did</h3>
+        <ul class="ticks">
+          <li data-i18n="ai.did.ai1">Investigation and coverage across a large surface</li>
+          <li data-i18n="ai.did.ai2">Command drafting</li>
+          <li data-i18n="ai.did.ai3">Configuration review</li>
+          <li data-i18n="ai.did.ai4">Risk identification and architecture discussion</li>
+          <li data-i18n="ai.did.ai5">Troubleshooting and documentation drafting</li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h3 data-i18n="ai.did.humanH">What the human did</h3>
+        <ul class="ticks">
+          <li data-i18n="ai.did.h1">Approved every privileged command</li>
+          <li data-i18n-html="ai.did.h2">Executed <span class="mono">sudo</span> interactively</li>
+          <li data-i18n="ai.did.h3">Validated actual system state and checked results</li>
+          <li data-i18n="ai.did.h4">Decided whether to apply changes, and tested behaviour</li>
+          <li data-i18n="ai.did.h5">Decided what counts as proof</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="boundaries">
+      <h3 data-i18n="ai.bound.h">Privilege boundaries enforced by the operating system, not by prompt instructions</h3>
+      <ul class="chips chips-lg">
+        <li data-i18n="ai.bound.c1">No passwordless sudo, any user</li>
+        <li data-i18n-html="ai.bound.c2">Admin user outside the <span class="mono">docker</span> group</li>
+        <li data-i18n="ai.bound.c3">Agent user: no sudo</li>
+        <li data-i18n="ai.bound.c4">Agent user: no Docker socket</li>
+        <li data-i18n="ai.bound.c5">No admin SSH keys in the agent account</li>
+        <li data-i18n="ai.bound.c6">No publicly exposed agent port</li>
+        <li data-i18n="ai.bound.c7">Workspace-scoped by default</li>
+        <li data-i18n="ai.bound.c8">No Git remote or push without specific approval</li>
+      </ul>
+      <p class="boundaries-note" data-i18n="ai.bound.note">
+        The design rule: an assistant's blast radius should be bounded by Unix permissions,
+        not by its own good behaviour. Model behaviour is a probability distribution; file
+        permissions are not.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────────────── VALIDATION ────────────────────────── -->
+<section class="section" id="validation" aria-labelledby="validation-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="val.kicker">07 &mdash; Evidence</p>
+      <h2 id="validation-h" data-i18n="val.h">Four times investigation changed the answer</h2>
+      <p class="section-lede" data-i18n="val.lede">
+        Each of these started as a plausible conclusion and ended somewhere else, because
+        the system was consulted instead of assumed.
+      </p>
+    </header>
+
+    <div class="stories">
+
+      <article class="story">
+        <p class="story-tag" data-i18n="val.s1.tag">Configuration is a hypothesis</p>
+        <h3 data-i18n="val.s1.h">The SSH config said two different things</h3>
+        <p data-i18n-html="val.s1.p">
+          The base <span class="mono">sshd_config</span> shipped with a late
+          <span class="mono">PermitRootLogin yes</span>, while an <span class="mono">Include</span>d
+          drop-in set <span class="mono">PermitRootLogin no</span>. OpenSSH takes the
+          <em>first</em> obtained value, so the drop-in wins — but that is a claim about parsing
+          order, not evidence. It was settled by reading the effective configuration.
+        </p>
+        <div class="code" data-copy>
+          <pre><code data-i18n-html="val.s1.code">sudo sshd -t                          # syntax check before any reload
+sudo sshd -T | grep '^permitrootlogin '
+# → permitrootlogin no</code></pre>
+          <button class="copy-btn" type="button" aria-label="Copy command to clipboard" data-i18n="copy.label" data-i18n-aria-label="copy.aria">Copy</button>
+        </div>
+        <p class="story-out" data-i18n-html="val.s1.out"><strong>Outcome:</strong> on-disk configuration is a hypothesis; <span class="mono">sshd -T</span> is the evidence. Had the reasoning been wrong, the difference between "we discussed it" and "we checked it" would have been remote root login.</p>
+      </article>
+
+      <article class="story">
+        <p class="story-tag" data-i18n="val.s2.tag">Anomaly, not vulnerability</p>
+        <h3 data-i18n-html="val.s2.h"><span class="mono">net.ipv4.ip_forward=1</span> looked wrong, and was not</h3>
+        <p data-i18n-html="val.s2.p">
+          IP forwarding was enabled at runtime with no assignment anywhere in
+          <span class="mono">/etc/sysctl.conf</span>, <span class="mono">/etc/sysctl.d/</span>,
+          <span class="mono">/usr/lib/sysctl.d/</span> or <span class="mono">/lib/sysctl.d/</span>.
+          Correlating with the live Docker iptables chains and a <span class="mono">DROP</span>
+          IPv4 <span class="mono">FORWARD</span> policy showed it to be runtime state owned by
+          Docker bridge networking.
+        </p>
+        <p class="story-out" data-i18n-html="val.s2.out">
+          <strong>Outcome:</strong> recorded as an <em>inference</em>, not a fact — no persistence
+          file proves ownership. The operational conclusion followed from the uncertainty: leave
+          it alone, and do <em>not</em> add a duplicate persistent sysctl entry asserting an
+          ownership nobody established.
+        </p>
+      </article>
+
+      <article class="story">
+        <p class="story-tag" data-i18n="val.s3.tag">Reconciliation, not correction</p>
+        <h3 data-i18n="val.s3.h">A 302 that was not a bug</h3>
+        <p data-i18n-html="val.s3.p">
+          An unprivileged audit fetched the monitoring root without following redirects and got
+          <span class="mono">302 &rarr; /dashboard</span>, appearing to contradict an earlier
+          "final 200" record. Both were correct — they measured different points in one flow
+          (<span class="mono">GET /</span> &rarr; 302 &rarr; <span class="mono">/dashboard</span>
+          &rarr; 200).
+        </p>
+        <p class="story-out" data-i18n-html="val.s3.out">
+          <strong>Outcome:</strong> the real finding was a hidden <em>dependency</em> — the monitor
+          is only correct while it follows redirects. Accepting 200–299 without following would
+          turn a healthy service into a permanent false alarm.
+        </p>
+      </article>
+
+      <article class="story">
+        <p class="story-tag" data-i18n="val.s4.tag">Storage engines have opinions</p>
+        <h3 data-i18n="val.s4.h">WAL behaviour redesigned the backup</h3>
+        <p data-i18n-html="val.s4.p">
+          Both application databases run SQLite in WAL mode, and at inspection each
+          <span class="mono">-wal</span> file was larger than its main database — nearly three
+          times larger for the automation platform. A naïve copy of the
+          <span class="mono">.db</span> during writes would have omitted most of the live state.
+        </p>
+        <p class="story-out" data-i18n-html="val.s4.out">
+          <strong>Outcome:</strong> the pipeline was designed around an application-consistent
+          snapshot before any backup code was written — and the audit also surfaced the
+          encryption-key file that a restore would silently need.
+        </p>
+      </article>
+
+    </div>
+
+    <div class="verified-list">
+      <h3 data-i18n="val.other.h">Other checks performed against the running system</h3>
+      <ul class="ticks two-col">
+        <li data-i18n="val.other.i1">Host services confirmed enabled and active: UFW, Fail2ban, AppArmor, auditd, unattended-upgrades, journald retention</li>
+        <li data-i18n="val.other.i2">Runtime sysctl state observed directly — reverse-path filtering, syncookies, ICMP redirect handling, kernel pointer and dmesg restrictions, hardlink/symlink protection</li>
+        <li data-i18n="val.other.i3">Unexplained loopback listeners investigated to completion and classified expected / benign / localhost-only, with evidence</li>
+        <li data-i18n="val.other.i4">IPv6 exposure audited separately from IPv4: Docker networks confirmed IPv6-disabled, the shared proxy network confirmed IPv4-only</li>
+        <li data-i18n="val.other.i5">Application health endpoints probed and compared before a monitor path was chosen</li>
+        <li data-i18n="val.other.i6">A privileged read-only inventory pass that closed gaps an earlier unprivileged audit had explicitly flagged as unverifiable, instead of filling them with assumptions</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────── STATUS ──────────────────────────── -->
+<section class="section section-alt" id="status" aria-labelledby="status-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="st.kicker">08 &mdash; Roadmap</p>
+      <h2 id="status-h" data-i18n="st.h">Current status</h2>
+      <p class="section-lede" data-i18n="st.lede">
+        Where something is unfinished, it says so. Where a conclusion is an inference rather
+        than a measurement, it says that too.
+      </p>
+    </header>
+
+    <div class="table-scroll">
+      <table class="status-table">
+        <caption class="sr-only" data-i18n="st.caption">Status of each area of the infrastructure project</caption>
+        <thead>
+          <tr><th scope="col" data-i18n="st.colArea">Area</th><th scope="col" data-i18n="st.colStatus">Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row" data-i18n-html="st.r1">Edge routing, TLS, HTTP&nbsp;&rarr; HTTPS redirect</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r2">Application stacks behind the proxy</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r3">Host hardening baseline</th><td><span class="badge badge-ok" data-i18n="badge.operationalAudited">Operational, audited</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r4">Agent under systemd with bounded privileges</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r5">Monitoring + alerting, validated by a real failure test</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r6">Path-level backup inventory</th><td><span class="badge badge-ok" data-i18n="badge.completePlan">Complete for the current plan</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r7">SQLite consistency mechanism</th><td><span class="badge badge-wip" data-i18n="badge.inProgress">In progress</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r8">Restic + Backblaze B2 implementation</th><td><span class="badge badge-plan" data-i18n="badge.planned">Planned</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r9">Restore test</th><td><span class="badge badge-plan" data-i18n="badge.notPerformed">Not performed</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r10">DR runbook</th><td><span class="badge badge-wip" data-i18n="badge.skeleton">Skeleton</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r11">Independent external monitoring</th><td><span class="badge badge-plan" data-i18n="badge.planned">Planned</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r12">Image tags resolved to immutable digests</th><td><span class="badge badge-plan" data-i18n="badge.open">Open</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="status-foot" data-i18n-html="st.foot">
+      The parts still labelled <em>in progress</em> — SQLite consistency, Restic/B2, and above
+      all the restore test — are the parts that will make this system genuinely recoverable,
+      and they are not claimed before they are true.
+    </p>
+  </div>
+</section>
+
+<!-- ──────────────────────────── DOCS ──────────────────────────── -->
+<section class="section" id="docs" aria-labelledby="docs-h">
+  <div class="wrap">
+    <header class="section-head">
+      <p class="section-kicker" data-i18n="docs.kicker">09 &mdash; Source</p>
+      <h2 id="docs-h" data-i18n="docs.h">Read the documentation</h2>
+      <p class="section-lede" data-i18n="docs.lede">
+        The public repository contains documentation and sanitized examples only. No
+        hostnames, IP addresses, credentials, tokens, keys, database files or production
+        paths appear in it — every example configuration is an educational reconstruction
+        using placeholder values.
+      </p>
+    </header>
+
+    <ul class="doc-grid">
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/architecture.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">architecture.md</span><span class="doc-desc" data-i18n="docs.d1">System model, request path, trust boundaries</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/security.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">security.md</span><span class="doc-desc" data-i18n="docs.d2">Layered controls and how each was verified</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/monitoring.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">monitoring.md</span><span class="doc-desc" data-i18n="docs.d3">Signals, alerting, validation, blind spots</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/disaster-recovery.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">disaster-recovery.md</span><span class="doc-desc" data-i18n="docs.d4">Recovery model and its validation gate</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/backup-strategy.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">backup-strategy.md</span><span class="doc-desc" data-i18n="docs.d5">Data classification and the SQLite problem</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/ai-assisted-engineering.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">ai-assisted-engineering.md</span><span class="doc-desc" data-i18n="docs.d6">How AI was used, and how it was bounded</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/docs/lessons-learned.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">lessons-learned.md</span><span class="doc-desc" data-i18n="docs.d7">What the project actually taught</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/blob/main/diagrams/README.md" target="_blank" rel="noopener noreferrer"><span class="doc-name">diagrams/</span><span class="doc-desc" data-i18n="docs.d8">Architecture, request path, monitoring, backup flows</span></a></li>
+      <li><a class="doc" href="https://github.com/92pablocosta/vps-public-portfolio/tree/main/examples" target="_blank" rel="noopener noreferrer"><span class="doc-name">examples/</span><span class="doc-desc" data-i18n="docs.d9">Sanitized Compose, Traefik, systemd, host configs</span></a></li>
+    </ul>
+
+    <div class="cta">
+      <div>
+        <h3 data-i18n="docs.cta.h">Relevant to</h3>
+        <p data-i18n="docs.cta.p">
+          AI Automation Engineer &middot; Automation Engineer &middot; Platform / Infrastructure
+          Engineer &middot; DevOps-adjacent &middot; Solutions Engineer — containerized service
+          delivery behind a reverse proxy, host hardening and privilege design, monitoring
+          validated by real failure, backup reasoning grounded in storage-engine behaviour, and
+          a documented method for working with AI assistants in privileged environments.
+        </p>
+      </div>
+      <a class="btn btn-primary" href="https://github.com/92pablocosta/vps-public-portfolio" target="_blank" rel="noopener noreferrer">
+        <span data-i18n="docs.cta.btn">Open the repository</span> <span class="arrow" aria-hidden="true">&#8599;</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p data-i18n="footer.p">
+      Public, sanitized case study. The real environment is operated from a separate private
+      repository; no hostnames, addresses, credentials or production paths appear here.
+    </p>
+    <a href="https://github.com/92pablocosta/vps-public-portfolio" target="_blank" rel="noopener noreferrer">github.com/92pablocosta/vps-public-portfolio</a>
+  </div>
+</footer>
+
+<script src="translations.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
