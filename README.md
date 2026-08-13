@@ -4,8 +4,8 @@
 
 A public, sanitized case study of a single-node Ubuntu Server VPS running a
 containerized edge/application stack behind Traefik, plus a host-native AI
-agent under systemd, with monitoring, alerting, and an in-progress
-Disaster Recovery and encrypted backup design.
+agent under systemd, with monitoring, alerting, encrypted off-site backups
+validated by a real data restore, and an in-progress Disaster Recovery drill.
 
 > **This repository contains the public landing page source, documentation,
 > and sanitized examples.**
@@ -28,7 +28,7 @@ Disaster Recovery and encrypted backup design.
 | **Public attack surface** | TCP 22, 80, 443 only. No application port is published on the host. |
 | **Host controls** | UFW, Fail2ban, AppArmor, auditd, journald retention, unattended-upgrades, sysctl hardening |
 | **Monitoring** | Uptime Kuma HTTP checks + a systemd-timer push heartbeat, alerting to a chat channel |
-| **Backups / DR** | Design complete, implementation **in progress**. Restic + Backblaze B2 **planned**. Restore test **not yet performed**. |
+| **Backups / DR** | Encrypted Restic + Backblaze B2 backups are operational, automated, and validated by a real data restore. A full-VPS rebuild drill, measured RTO, and off-host backup-failure alerting remain open. |
 | **Method** | AI-assisted engineering with human validation: `INSPECT → PLAN → CHANGE → VERIFY → DOCUMENT` |
 
 ### Public site source
@@ -128,7 +128,7 @@ Uptime Kuma
 **Data:** SQLite (n8n, Uptime Kuma, agent state) · Docker named volumes
 
 **Operations:** Git/GitHub (private ops repo) · systemd timers · Restic +
-Backblaze B2 *(planned)* · Obsidian knowledge base for engineering notes
+Backblaze B2 · Obsidian knowledge base for engineering notes
 
 **Engineering method:** AI assistants (Claude Code / Codex) used under an
 explicit human-approval workflow — see
@@ -150,7 +150,7 @@ Each of these was a deliberate choice with a stated reason, not a default.
 | `no-new-privileges:true` on edge containers | Cheap, standard privilege-escalation containment. |
 | Pinned image tags, never `latest` | Reproducibility during recovery. (Resolving tags to immutable digests is still open — see below.) |
 | Real failure tests over configuration-only validation | A monitor that has never fired is an untested monitor. |
-| Backup is not "done" until a restore is tested | Stated as policy before any backup code was written, so the deadline could not quietly redefine the finish line. |
+| Backup is not "done" until a restore is tested | Stated as policy before any backup code was written; a real data restore now validates the backup path, while full-system recovery remains a separate, open test. |
 
 ## 6. Security model
 
@@ -237,7 +237,7 @@ external monitoring is an identified improvement, not an implemented control.
 
 Full detail: [`docs/monitoring.md`](docs/monitoring.md).
 
-## 8. Disaster Recovery — *in progress*
+## 8. Disaster Recovery — *partially validated*
 
 The DR model separates two things that are often conflated:
 
@@ -247,22 +247,24 @@ The DR model separates two things that are often conflated:
   encryption material, credentials. Never in Git; belongs to an encrypted backup
   process with separate custody.
 
-Recovery therefore has two halves, and both must succeed. Documented recovery
-work so far covers a clean-host bootstrap sequence, exact version pinning, and
-preservation of a **local source patch** to the agent (recorded with its base
-commit and a verified SHA-256) — because an environment that cannot reproduce
-its own local modifications is not reproducible at all.
+Recovery therefore has two halves, and both must succeed. The documented work
+covers a clean-host bootstrap sequence, exact version pinning, and preservation
+of a **local source patch** to the agent (recorded with its base commit and a
+verified SHA-256) — because an environment that cannot reproduce its own local
+modifications is not reproducible at all.
 
-> **Status: the DR procedure is explicitly not validated.** It will only be
-> considered complete after a real restore test on an isolated host, with
-> recorded timings, evidence, and gaps. Anything short of that is a plan, not a
-> recovery capability.
+> **Status: the data-restore path is validated.** A real restore from off-site
+> storage recovered all six SQLite databases, passed integrity checks, and
+> included every recovery-critical file, including the automation platform's
+> encryption-key file. The DR procedure is not complete: a full
+> provision-to-operational VPS rebuild drill, including DNS and TLS validation,
+> has not yet been performed or timed.
 
 Full detail: [`docs/disaster-recovery.md`](docs/disaster-recovery.md).
 
-## 9. Backup strategy — *design complete, implementation in progress*
+## 9. Backup strategy — *operational and restore-validated*
 
-Planned pipeline:
+Running pipeline:
 
 ```text
 live SQLite
@@ -289,17 +291,26 @@ main database* — for the automation platform, nearly three times larger. Copyi
 the `.db` alone during writes would not produce a slightly stale backup; it
 would omit the majority of the live state. The inverse trap was also recorded:
 some WAL files were 0 bytes at inspection, and a design that assumes that will
-hold works right up until the first busy moment.
+hold works right up until the first busy moment. The running pipeline therefore
+does not copy database files by hand: it captures six live databases through
+SQLite's online-backup API while the applications continue running, then checks
+their integrity before archiving and after restore.
 
 A second, sharper dependency: **the automation platform's stored credentials are
 encrypted with a key held in a small config file inside the volume, not in an
 environment variable.** A database restored without that file comes back with
 every workflow intact and every credential undecryptable. Finding this before
 building the backup, rather than during a recovery, is the single highest-value
-result of the audit work.
+result of the audit work. The restore test explicitly verified that this file
+returns with the data.
 
-> **Status: Restic + Backblaze B2 is planned and not yet implemented.** No
-> restore has been tested. Current protection is provider-side snapshots only.
+> **Status: Restic archives are encrypted and deduplicated, then stored in a
+> private Backblaze B2 bucket under separate custody.** A systemd oneshot unit
+> and persistent daily timer run the pipeline with a shared lock, retention of
+> 7 daily, 4 weekly, and 6 monthly snapshots, and weekly prune plus full
+> repository integrity checks. A real restore from off-site storage succeeded.
+> Provider-side snapshots are an optional additional recovery layer, not a
+> substitute for this encrypted off-site backup.
 
 Full detail: [`docs/backup-strategy.md`](docs/backup-strategy.md).
 
@@ -365,6 +376,10 @@ configured:
   exiting `0/SUCCESS`, next firing scheduled, script present at restrictive
   ownership and mode — with its contents deliberately left unread because it is
   secret-bearing.
+- Six live SQLite databases captured through the online-backup API, with every
+  snapshot passing integrity checks before archive and after a real restore
+  from off-site storage; the recovery-critical encryption-key file was verified
+  present in the restored material.
 - A privileged read-only inventory pass that closed gaps an earlier
   **unprivileged** audit had explicitly flagged as unverifiable, instead of
   filling them with assumptions.
@@ -388,8 +403,9 @@ Condensed; the full set is in [`docs/lessons-learned.md`](docs/lessons-learned.m
 6. **Least privilege applies to AI agents too**, and it is cheap to enforce at
    the Unix layer before it is ever needed.
 7. **Write down the finish line before you approach it.** "Not complete until a
-   real restore test" was recorded early, which is why it is still labelled
-   *in progress* here instead of quietly rounded up to *done*.
+   real restore test" was recorded early, so the data-restore path was not
+   called done until it passed. The remaining full-VPS rebuild drill is still
+   stated separately rather than being folded into a broad recovery claim.
 
 ## 13. Current status
 
@@ -400,11 +416,14 @@ Condensed; the full set is in [`docs/lessons-learned.md`](docs/lessons-learned.m
 | Host hardening baseline | Operational, audited |
 | Agent under systemd with bounded privileges | Operational |
 | Monitoring + alerting, validated by a real failure test | Operational |
-| Path-level backup inventory | Complete for the current plan |
-| SQLite consistency mechanism | **In progress** — must be chosen and tested per application |
-| Restic + Backblaze B2 implementation | **Planned** |
-| Restore test | **Not performed** |
-| DR runbook | **Skeleton** — promoted to runbook only after a successful restore test |
+| Path-level backup inventory | Implemented |
+| SQLite consistency mechanism, six databases | Validated — online-backup API with integrity checks before archive and after restore |
+| Restic + Backblaze B2, encrypted off-site | Operational |
+| Automated daily backup, retention, and weekly maintenance | Operational |
+| Restore test, data | Validated |
+| Full-VPS rebuild drill and measured RTO | **Not performed** |
+| DR runbook | **Partial** — data restore is proven; the full rebuild sequence remains provisional |
+| External backup-failure alerting | **Planned** |
 | Independent external monitoring | **Planned** |
 | Image tags resolved to immutable digests | **Open** |
 
@@ -449,7 +468,7 @@ assistants in privileged environments.
 ### On honesty in this repository
 
 Where something is unfinished, it says so. Where a conclusion is an inference
-rather than a measurement, it says that too. The parts still labelled
-*in progress* — SQLite consistency, Restic/B2, and above all the restore test —
-are the parts that will make this system genuinely recoverable, and they are not
-claimed before they are true.
+rather than a measurement, it says that too. Backup is operational, integrity
+checked, and validated by a real data restore. What remains open — a timed
+full-VPS rebuild drill and off-host backup-failure alerting — is stated as open,
+not quietly folded into the word *recoverable*.
