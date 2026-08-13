@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VPS Infrastructure — Engineering Case Study</title>
-<meta name="description" content="A single-node Ubuntu VPS running a containerized stack behind Traefik, with host hardening, monitoring validated by a real failure test, and an in-progress backup/DR design. Built with AI assistance under human validation.">
+<meta name="description" content="A single-node Ubuntu VPS running a containerized stack behind Traefik, with host hardening, monitoring validated by a real failure test, and encrypted off-site backups validated by a real restore. Built with AI assistance under human validation.">
 <meta name="color-scheme" content="dark light">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f1319'/><path d='M8 20.5 14 11l4 6 2-3 4 6.5z' fill='none' stroke='%2352d0b0' stroke-width='2' stroke-linejoin='round'/></svg>">
@@ -117,9 +117,10 @@
     </dl>
 
     <p class="hero-note" data-i18n-html="hero.note">
-      <strong>Scope note.</strong> Backups and Disaster Recovery are designed but
-      <em>not yet implemented or restore-tested</em>. Nothing on this page is claimed
-      before it is true — see <a href="#status">current status</a>.
+      <strong>Scope note.</strong> Encrypted off-site backup is implemented, automated
+      and validated by a real data restore. A full-VPS rebuild drill and a measured
+      recovery time are <em>still pending</em>. Nothing on this page is claimed before
+      it is true — see <a href="#status">current status</a>.
     </p>
   </div>
 </section>
@@ -497,9 +498,10 @@
       <p class="section-kicker" data-i18n="dr.kicker">05 &mdash; Recoverability</p>
       <h2 id="backup-h" data-i18n="dr.h">Backup &amp; Disaster Recovery</h2>
       <p class="section-lede" data-i18n="dr.lede">
-        Design complete, implementation in progress. The honesty of this section is the
-        point: a backup is not done until a restore is tested, and that test has not
-        happened yet.
+        Encrypted off-site backup is implemented, automated and verified by a real
+        restore. The honesty of this section is still the point: the data-restore path
+        is proven, a full-VPS rebuild has not been drilled, and no recovery time is
+        claimed until it is.
       </p>
     </header>
 
@@ -508,38 +510,40 @@
         <h3 id="dr-done-h"><span class="badge badge-ok" data-i18n="badge.implemented">Implemented</span></h3>
         <ul class="ticks">
           <li data-i18n="dr.done.i1">Data classified before anything was backed up — critical mutable data, secret-bearing recovery material, reproducible configuration, operational docs, disposable runtime data</li>
-          <li data-i18n="dr.done.i2">Path-level backup inventory complete for the current plan</li>
-          <li data-i18n="dr.done.i3">Reproducible configuration under Git: Compose files, Traefik config, systemd units, host hardening, runbooks</li>
-          <li data-i18n="dr.done.i4">Clean-host bootstrap sequence documented with exact version pinning</li>
-          <li data-i18n="dr.done.i5">A local source patch to the agent preserved with its base commit and a verified SHA-256</li>
-          <li data-i18n="dr.done.i6">Current protection: provider-side snapshots only</li>
+          <li data-i18n="dr.done.i2">Path-level backup inventory complete — and now the executed scope of a running pipeline, not a plan</li>
+          <li data-i18n="dr.done.i3">Six live SQLite databases captured through the engine's own online-backup API instead of a file copy; every snapshot integrity-checked, 6/6, before and after restore</li>
+          <li data-i18n="dr.done.i4">Restic archives, encrypted and deduplicated, pushed off-site to a private Backblaze B2 bucket under separate custody — with the repository password and access credentials also held outside the server they protect</li>
+          <li data-i18n="dr.done.i5">Daily automation under systemd: a oneshot service and a persistent timer that catches up after downtime, serialized by a lock, with retention of 7 daily, 4 weekly and 6 monthly snapshots</li>
+          <li data-i18n="dr.done.i6">Weekly maintenance on its own timer — prune plus a full repository integrity check — sharing that same lock so it can never overlap a backup</li>
+          <li data-i18n="dr.done.i7">A real restore executed from off-site storage: all six databases passed their integrity checks and every recovery-critical file was present, including the automation platform's encryption-key file</li>
+          <li data-i18n="dr.done.i8">Reproducible configuration under Git — Compose files, Traefik config, systemd units, host hardening, runbooks — plus a clean-host bootstrap sequence with exact version pinning and a local agent patch preserved with its base commit and a verified SHA-256</li>
         </ul>
       </section>
 
       <section class="status-col status-planned" aria-labelledby="dr-planned-h">
-        <h3 id="dr-planned-h"><span class="badge badge-plan" data-i18n="badge.plannedProgress">Planned / in progress</span></h3>
+        <h3 id="dr-planned-h"><span class="badge badge-plan" data-i18n="badge.stillOpen">Still open</span></h3>
         <ul class="ticks ticks-open">
-          <li data-i18n-html="dr.plan.i1"><strong>In progress</strong> — SQLite consistency mechanism, to be chosen and tested per application</li>
-          <li data-i18n-html="dr.plan.i2"><strong>Planned</strong> — Restic + Backblaze B2 implementation</li>
-          <li data-i18n-html="dr.plan.i3"><strong>Not performed</strong> — restore test on an isolated host, with recorded timings and evidence</li>
-          <li data-i18n-html="dr.plan.i4"><strong>Not measured</strong> — recovery objectives, which follow from that test rather than preceding it</li>
-          <li data-i18n-html="dr.plan.i5"><strong>Skeleton</strong> — DR runbook, promoted to runbook only after a successful restore</li>
+          <li data-i18n-html="dr.plan.i1"><strong>Not drilled</strong> — a full provision-to-operational rebuild: new host, security baseline, container platform, restore, service recreation, DNS and TLS validation</li>
+          <li data-i18n-html="dr.plan.i2"><strong>Not measured</strong> — the recovery time for that rebuild. Restoring the data is proven; rebuilding the whole system is not, so no number is published</li>
+          <li data-i18n-html="dr.plan.i3"><strong>Missing</strong> — external backup-failure alerting. Failures are recorded locally, but nothing off-host reports a missed run or a failed integrity check, and an alarm living on the VPS cannot announce the loss of that VPS</li>
+          <li data-i18n-html="dr.plan.i4"><strong>Partial</strong> — the DR runbook covers the proven data-restore path; the full rebuild sequence stays provisional until it has been drilled</li>
+          <li data-i18n-html="dr.plan.i5"><strong>Undecided</strong> — what role provider-side snapshots play in the recovery policy. A possible additional layer, not a replacement for encrypted off-site backup</li>
         </ul>
       </section>
     </div>
 
     <div class="pipeline-wrap">
       <div class="pipeline-head">
-        <h3 data-i18n="dr.pipe.h">Planned backup pipeline</h3>
-        <span class="badge badge-plan" data-i18n="badge.notImplemented">Not yet implemented</span>
+        <h3 data-i18n="dr.pipe.h">Backup pipeline, as it runs</h3>
+        <span class="badge badge-ok" data-i18n="badge.validated">Validated</span>
       </div>
       <ol class="pipeline" role="list">
-        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.1i">Source</span><span class="pipe-t" data-i18n="dr.pipe.1t">Live SQLite</span><span class="pipe-d" data-i18n="dr.pipe.1d">n8n &middot; Uptime Kuma &middot; agent state</span></li>
-        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.2i">Capture</span><span class="pipe-t" data-i18n="dr.pipe.2t">Consistent snapshot</span><span class="pipe-d" data-i18n="dr.pipe.2d">application-consistent, WAL-aware</span></li>
-        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.3i">Stage</span><span class="pipe-t" data-i18n="dr.pipe.3t">Staging directory</span><span class="pipe-d" data-i18n="dr.pipe.3d">restrictive permissions, bounded lifetime</span></li>
-        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.4i">Archive</span><span class="pipe-t">Restic</span><span class="pipe-d" data-i18n="dr.pipe.4d">encrypted, deduplicated</span></li>
-        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.5i">Off-site</span><span class="pipe-t">Backblaze B2</span><span class="pipe-d" data-i18n="dr.pipe.5d">separate custody</span></li>
-        <li class="pipe-node pipe-gate"><span class="pipe-i" data-i18n="dr.pipe.6i">Gate</span><span class="pipe-t" data-i18n="dr.pipe.6t">Restore test</span><span class="pipe-d" data-i18n="dr.pipe.6d">until this passes, the rest is a plan</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.1i">Source</span><span class="pipe-t" data-i18n="dr.pipe.1t">Live SQLite</span><span class="pipe-d" data-i18n="dr.pipe.1d">six databases &middot; n8n, Uptime Kuma, agent state</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.2i">Capture</span><span class="pipe-t" data-i18n="dr.pipe.2t">Consistent snapshot</span><span class="pipe-d" data-i18n="dr.pipe.2d">online-backup API, WAL-aware, integrity-checked</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.3i">Stage</span><span class="pipe-t" data-i18n="dr.pipe.3t">Staging directory</span><span class="pipe-d" data-i18n="dr.pipe.3d">root-only, rebuilt and removed on every run</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.4i">Archive</span><span class="pipe-t">Restic</span><span class="pipe-d" data-i18n="dr.pipe.4d">encrypted, deduplicated, retained 7/4/6</span></li>
+        <li class="pipe-node"><span class="pipe-i" data-i18n="dr.pipe.5i">Off-site</span><span class="pipe-t">Backblaze B2</span><span class="pipe-d" data-i18n="dr.pipe.5d">private bucket, separate custody</span></li>
+        <li class="pipe-node pipe-gate"><span class="pipe-i" data-i18n="dr.pipe.6i">Gate</span><span class="pipe-t" data-i18n="dr.pipe.6t">Restore test</span><span class="pipe-d" data-i18n="dr.pipe.6d">passed — restored, integrity-checked, verified</span></li>
       </ol>
     </div>
 
@@ -553,7 +557,9 @@
           <span class="mono">.db</span> alone during writes would not produce a slightly stale
           backup; it would omit the majority of the live state. The inverse trap was recorded
           too: some WAL files were 0&nbsp;bytes at inspection, and a design that assumes that
-          holds works right up until the first busy moment.
+          holds works right up until the first busy moment. The shipped pipeline therefore
+          copies nothing by hand: each database is snapshotted through the engine's own
+          online-backup API while the application keeps running.
         </p>
       </aside>
 
@@ -564,7 +570,8 @@
           config file <em>inside the volume</em> — not in an environment variable. A database
           restored without that file comes back with every workflow intact and every credential
           undecryptable. Finding this before building the backup, rather than during a recovery,
-          is the single highest-value result of the audit work.
+          is the single highest-value result of the audit work — and the restore test explicitly
+          verified that this file comes back with the data.
         </p>
       </aside>
     </div>
@@ -794,11 +801,14 @@ sudo sshd -T | grep '^permitrootlogin '
           <tr><th scope="row" data-i18n="st.r3">Host hardening baseline</th><td><span class="badge badge-ok" data-i18n="badge.operationalAudited">Operational, audited</span></td></tr>
           <tr><th scope="row" data-i18n="st.r4">Agent under systemd with bounded privileges</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
           <tr><th scope="row" data-i18n="st.r5">Monitoring + alerting, validated by a real failure test</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
-          <tr><th scope="row" data-i18n="st.r6">Path-level backup inventory</th><td><span class="badge badge-ok" data-i18n="badge.completePlan">Complete for the current plan</span></td></tr>
-          <tr><th scope="row" data-i18n="st.r7">SQLite consistency mechanism</th><td><span class="badge badge-wip" data-i18n="badge.inProgress">In progress</span></td></tr>
-          <tr><th scope="row" data-i18n="st.r8">Restic + Backblaze B2 implementation</th><td><span class="badge badge-plan" data-i18n="badge.planned">Planned</span></td></tr>
-          <tr><th scope="row" data-i18n="st.r9">Restore test</th><td><span class="badge badge-plan" data-i18n="badge.notPerformed">Not performed</span></td></tr>
-          <tr><th scope="row" data-i18n="st.r10">DR runbook</th><td><span class="badge badge-wip" data-i18n="badge.skeleton">Skeleton</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r6">Path-level backup inventory</th><td><span class="badge badge-ok" data-i18n="badge.implemented">Implemented</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r7">SQLite consistency mechanism, six databases</th><td><span class="badge badge-ok" data-i18n="badge.validated">Validated</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r8">Restic + Backblaze B2, encrypted off-site</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r9">Automated daily backup, retention and weekly maintenance</th><td><span class="badge badge-ok" data-i18n="badge.operational">Operational</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r10">Restore test, data</th><td><span class="badge badge-ok" data-i18n="badge.validated">Validated</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r13">Full-VPS rebuild drill and measured RTO</th><td><span class="badge badge-plan" data-i18n="badge.notPerformed">Not performed</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r14">DR runbook</th><td><span class="badge badge-wip" data-i18n="badge.partial">Partial</span></td></tr>
+          <tr><th scope="row" data-i18n="st.r15">External backup-failure alerting</th><td><span class="badge badge-plan" data-i18n="badge.planned">Planned</span></td></tr>
           <tr><th scope="row" data-i18n="st.r11">Independent external monitoring</th><td><span class="badge badge-plan" data-i18n="badge.planned">Planned</span></td></tr>
           <tr><th scope="row" data-i18n="st.r12">Image tags resolved to immutable digests</th><td><span class="badge badge-plan" data-i18n="badge.open">Open</span></td></tr>
         </tbody>
@@ -806,9 +816,10 @@ sudo sshd -T | grep '^permitrootlogin '
     </div>
 
     <p class="status-foot" data-i18n-html="st.foot">
-      The parts still labelled <em>in progress</em> — SQLite consistency, Restic/B2, and above
-      all the restore test — are the parts that will make this system genuinely recoverable,
-      and they are not claimed before they are true.
+      Backup is no longer the open item: it runs on a schedule, it is verified, and a real
+      restore has been performed. What is still open — a timed full-VPS rebuild drill and
+      off-host failure alerting — is written here as open rather than folded quietly into the
+      word <em>recoverable</em>.
     </p>
   </div>
 </section>
