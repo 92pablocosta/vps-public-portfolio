@@ -192,7 +192,8 @@ Material classified as secret-bearing and therefore **never** committed:
   were deliberately **left unread** during audits. Only a placeholder template
   is documented;
 - SQLite databases and Docker volume contents;
-- Restic repository password and object-storage credentials (planned system).
+- Restic repository password and object-storage credentials, held in
+  restricted on-host files plus separate off-host custody.
 
 Repository rules, applied to both the private ops repo and this public one:
 

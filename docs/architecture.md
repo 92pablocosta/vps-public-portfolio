@@ -144,8 +144,8 @@ push heartbeat rather than by an HTTP probe — see
 ## 7. Reproducibility boundary
 
 ```text
-Git (private ops repo)          Encrypted backup (planned)
-──────────────────────          ──────────────────────────
+Git (private ops repo)          Encrypted backup (operational)
+──────────────────────          ──────────────────────────────
 Compose files                   SQLite databases
 Traefik static config           Docker volume contents
 systemd units and drop-ins      Credential encryption material
@@ -157,6 +157,11 @@ Runbooks and documentation      Agent session/state data
 Neither half alone restores the service. Git makes the system *rebuildable*;
 the backup makes it *the same system*. Conflating the two is the most common way
 a "backed up" environment turns out not to be.
+
+Known reproducibility gap: the deployed backup and maintenance scripts and
+systemd units are documented but not yet captured as sanitized artifacts in the
+private ops repository. They must be collected from the VPS through a reviewed,
+read-only process rather than inferred from the documentation.
 
 ## 8. Open items
 

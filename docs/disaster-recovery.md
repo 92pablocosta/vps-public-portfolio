@@ -1,25 +1,28 @@
 # Disaster Recovery
 
-> **Status: skeleton. Not validated.**
-> This document describes a recovery *model* and an ordered outline. It is
-> deliberately not presented as a finished runbook, because it has never been
-> executed against a real failure or a real restore test.
+> **Status: partial — off-site data restore validated.**
+> A real restore recovered and verified the encrypted off-site data set. The
+> ordered full-host reconstruction remains provisional because a replacement
+> VPS has not been rebuilt end to end or timed.
 
 ---
 
 ## 1. The validation gate
 
-> **The Disaster Recovery procedure will only be considered validated after a
-> real restore test on an isolated host, with recorded timings, evidence, and
+> **The data-recovery path is validated; complete Disaster Recovery requires a
+> timed rebuild on an isolated replacement host, with recorded evidence and
 > gaps.**
 
-This sentence was written into the project *before* the backup system was
-designed, specifically so that schedule pressure could not later redefine what
-"done" means. Every claim below is therefore labelled as design, outline, or
-verified fact — never as a guarantee.
+The original gate — do not call recovery validated before a real restore — was
+written into the project *before* the backup system was designed, specifically
+so that schedule pressure could not later redefine what "done" means. Every
+claim below is therefore labelled as design, outline, or verified fact — never
+as a guarantee.
 
-An untested recovery procedure has an unknown success probability. Writing it
-down improves the odds; it does not establish them.
+That first gate was met by restoring the off-site data set into isolation and
+validating all six databases and critical recovery files. It did not exercise
+host provisioning, hardening, Docker, service activation, DNS, TLS, or a
+measured end-to-end recovery time.
 
 ## 2. Recovery model
 
@@ -61,14 +64,20 @@ a recovery plan is the most common version of this mistake.
 
 ## 3. Configuration reproducibility
 
-Everything needed to reconstruct the *shape* of the system is version
-controlled, sanitized, and reviewed:
+The intended boundary is that everything needed to reconstruct the *shape* of
+the system is version controlled, sanitized, and reviewed:
 
 - Compose files for every stack, with pinned image tags;
 - reverse-proxy static configuration;
 - systemd units, drop-ins, and timers;
 - host hardening: SSH drop-in, firewall defaults, sysctl, journald;
 - operator runbooks.
+
+One material exception remains: the deployed backup and maintenance scripts,
+services, and timers have not yet been captured as sanitized private-repository
+artifacts. Their behavior is documented and the data restore is proven, but Git
+alone does not yet reproduce that automation. Exact files must be collected
+read-only from the VPS and reviewed rather than reconstructed from prose.
 
 Values that cannot be committed appear as named placeholders (`${DOMAIN}`,
 `${ACME_EMAIL}`, `${WEBHOOK_URL}`, …). A deployment-time rendering mechanism is
@@ -145,15 +154,15 @@ not casually:
 - rotated when incident conditions warrant it — a recovery following a
   compromise should not restore the credentials that were compromised.
 
-An unresolved custody question is recorded explicitly: **a backup whose only
-decryption key lives inside the backup is not a recovery plan.** Where the
-repository password and object-storage credentials will be held off-host is an
-open decision, not an implementation detail.
+The Restic repository password and object-storage credentials are held in
+restricted on-host files and in separate off-host custody. Their values and
+custody mechanism are intentionally absent from Git. A backup whose only
+decryption key lived inside the backup would not be a recovery plan.
 
 ## 8. Recovery outline
 
 Ordered, with each phase's acceptance criteria still to be established by the
-restore test.
+full-host rebuild drill.
 
 1. **Provision** a clean Ubuntu host of the same major version; validate
    resources, time synchronization, and console access.
@@ -186,9 +195,14 @@ restore test.
     delivery without disclosing destination credentials, then observe for an
     agreed stabilization period before declaring recovery complete.
 
-## 9. What the restore test must produce
+## 9. What the validated data restore produced
 
-Not a pass/fail. A record:
+The completed test restored the off-site data set into an isolated directory.
+All six SQLite databases passed `PRAGMA integrity_check`, and the critical
+recovery files were present, including the automation platform's encryption-key
+file. The restore directory was removed after validation.
+
+The future full-host drill must produce a record, not merely a pass/fail result:
 
 - date, environment, operators;
 - actual recovery time per phase, and total;
@@ -197,23 +211,27 @@ Not a pass/fail. A record:
 - every assumption that turned out to be wrong;
 - follow-up owners for each gap.
 
-Only after that record exists does this document get promoted from *skeleton*
-to *runbook*.
+Only after that record exists can the complete replacement-host procedure be
+treated as validated rather than provisional.
 
 ## 10. Current honest position
 
 | Item | Status |
 | --- | --- |
-| Reproducible configuration in Git | Done |
+| Reproducible application/host configuration in Git | Done, within documented scope |
+| Backup automation reproduced in Git | **Not yet captured** |
 | Local patch preserved, digest verified | Done |
 | Patch applies cleanly to base commit | **Unverified** |
 | Path-level inventory of what must survive | Complete for the current plan |
-| SQLite consistency mechanism | **In progress** |
-| Encrypted off-site backup (Restic + B2) | **Planned** |
-| Off-host custody of backup credentials | **Undecided** |
-| Restore test | **Not performed** |
-| DR runbook | **Skeleton** |
+| SQLite consistency mechanism, six databases | **Validated** |
+| Encrypted off-site backup (Restic + B2) | **Operational** |
+| Off-host custody of backup credentials | **Confirmed** |
+| Off-site data restore | **Validated** |
+| Full replacement-VPS rebuild | **Not performed** |
+| Measured full-VPS RTO | **Undefined** |
+| External backup-failure alerting | **Planned** |
+| Provider snapshot role | **Undecided** |
+| DR runbook | **Partial** |
 
-Present protection against total host loss is provider-side snapshots. That is
-a fallback, not a designed recovery capability, and it has not been tested
-either.
+Provider snapshots may become an additional recovery layer, but their role is
+not yet defined and they do not replace the encrypted off-site backup.

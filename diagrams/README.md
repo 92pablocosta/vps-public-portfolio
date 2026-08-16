@@ -121,7 +121,7 @@ flowchart LR
     kuma -.-> blind
 ```
 
-## 5. Backup pipeline — *planned*
+## 5. Backup pipeline — *operational and restore-validated*
 
 ```mermaid
 flowchart LR
@@ -130,11 +130,14 @@ flowchart LR
     stage["Staging<br/>restrictive perms<br/>bounded lifetime"]
     restic["Restic<br/>encrypted · deduplicated"]
     b2["Backblaze B2<br/>off-site"]
-    verify["Verify<br/>snapshot · integrity · retention"]
+    verify["Verify<br/>6/6 databases · integrity · retention"]
     clean["Remove staging<br/>only after verification"]
 
     live --> snap --> stage --> restic --> b2
     b2 --> verify --> clean
+
+    restore["Real off-site restore<br/>6/6 databases verified"]
+    b2 --> restore
 
     warn["A plain copy of the .db during writes<br/>can omit most of the live state<br/>— the WAL was larger than the database."]
     live -.-> warn

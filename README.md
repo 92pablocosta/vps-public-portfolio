@@ -49,6 +49,17 @@ a deployed runtime copy. The site uses static HTML, CSS, and vanilla JavaScript,
 with no framework or build step. It supports English and Brazilian Portuguese,
 browser-language detection, and a persisted manual EN/PT selection.
 
+Validate the authoritative static source locally with:
+
+```bash
+node scripts/validate-site.mjs
+```
+
+The dependency-free check verifies EN/pt-BR key parity, translation references,
+local assets, fragment targets, JavaScript syntax for the translation catalog,
+local Markdown links, prohibited filenames, high-confidence credential shapes,
+and the absence of known obsolete backup-status claims.
+
 ## 2. Why I built it
 
 I wanted an environment where infrastructure decisions have real consequences:
@@ -421,6 +432,7 @@ Condensed; the full set is in [`docs/lessons-learned.md`](docs/lessons-learned.m
 | Restic + Backblaze B2, encrypted off-site | Operational |
 | Automated daily backup, retention, and weekly maintenance | Operational |
 | Restore test, data | Validated |
+| Backup automation captured as sanitized private Git artifacts | **Open** |
 | Full-VPS rebuild drill and measured RTO | **Not performed** |
 | DR runbook | **Partial** — data restore is proven; the full rebuild sequence remains provisional |
 | External backup-failure alerting | **Planned** |

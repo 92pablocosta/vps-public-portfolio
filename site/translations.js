@@ -173,7 +173,7 @@ window.TRANSLATIONS = {
     'sec.l6.i1': 'The Docker socket is privileged even when mounted read-only',
     'sec.l6.i2': 'Image tags are pinned but not yet resolved to immutable digests',
     'sec.l6.i3': 'Monitoring shares a host with its subject',
-    'sec.l6.i4': 'No restore test has been performed',
+    'sec.l6.i4': 'Off-site data restore validated; full-VPS rebuild drill pending',
 
     /* ---- monitoring ---- */
     'mon.kicker': '04 — Reliability',
@@ -513,7 +513,7 @@ window.TRANSLATIONS = {
     'sec.l6.i1': 'O Docker socket é privilegiado mesmo montado em somente leitura',
     'sec.l6.i2': 'As tags de imagem estão fixadas, mas ainda não resolvidas para digests imutáveis',
     'sec.l6.i3': 'O monitoramento compartilha host com aquilo que ele observa',
-    'sec.l6.i4': 'Nenhum teste de restore foi realizado',
+    'sec.l6.i4': 'Restore off-site de dados validado; drill de rebuild completo do VPS pendente',
 
     /* ---- monitoring ---- */
     'mon.kicker': '04 — Confiabilidade',

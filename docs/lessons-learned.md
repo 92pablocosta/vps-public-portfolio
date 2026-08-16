@@ -149,9 +149,10 @@ exactly when they are needed.
 ## 12. Write down the finish line before you approach it.
 
 "Not complete until a real restore test" was recorded before the backup system
-was designed. Because of that, backups are still labelled **planned** and DR is
-still labelled **skeleton** in this repository — rather than quietly rounded up
-to "done" once the scripts existed.
+was designed. Because of that, backup was not called complete when the scripts
+first existed. It was promoted to operational only after a real off-site data
+restore passed. Full Disaster Recovery remains **partial** until a clean VPS is
+rebuilt and timed end to end.
 
 **Practice:** define the acceptance criterion while the work is still abstract,
 when there is no pressure to be generous with yourself.

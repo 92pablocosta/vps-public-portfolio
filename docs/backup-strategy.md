@@ -1,8 +1,9 @@
 # Backup Strategy
 
-> **Status: design complete, implementation in progress.**
-> Restic + Backblaze B2 is **planned and not yet implemented**. No restore has
-> been tested. Current protection is provider-side snapshots only.
+> **Status: operational and restore-validated.**
+> Encrypted Restic backups to Backblaze B2 run automatically and passed a real
+> off-site data restore. A full replacement-VPS rebuild and measured recovery
+> time remain pending.
 
 ---
 
@@ -18,7 +19,7 @@ flowchart LR
 
     live --> snap --> stage --> restic --> b2
 
-    verify["Verify: snapshot exists<br/>integrity check<br/>retention applied"]
+    verify["Verify: six databases<br/>integrity check<br/>retention applied"]
     restic -.-> verify
     cleanup["Remove staging<br/>after verified success"]
     verify -.-> cleanup
@@ -61,9 +62,10 @@ Includes agent configuration and auth files, environment files, the ACME store,
 and the monitoring heartbeat script (whose embedded push URL is itself a
 credential).
 
-Open question, recorded rather than glossed: **custody**. A backup whose only
-key lives inside the backup is not a recovery plan. Where the repository
-password and object-storage credentials are held off-host is undecided.
+The repository password and object-storage credentials are held both in
+restricted on-host files and in separate off-host custody. Their values and
+custody mechanism remain outside this public repository. A backup whose only
+key lives inside the backup would not be a recovery plan.
 
 ### Reproducible configuration
 
@@ -114,11 +116,11 @@ usually empty" works perfectly until the first busy moment, which is exactly the
 moment worth backing up. The recorded rule is explicit: **do not assume WAL
 files are always empty.**
 
-The correct approach is an application-aware consistency mechanism (SQLite's own
-online backup / `VACUUM INTO`, or an application-supported export), chosen and
-tested **per application** against what that application actually supports.
-That selection is **in progress** and is a prerequisite for calling the backup
-implemented.
+The implemented pipeline uses SQLite's online-backup API through
+`sqlite3 SOURCE_DB ".backup 'TARGET_DB'"`. It captures six databases while the
+applications continue running, excludes the live WAL/SHM sidecars from the
+archive, and runs `PRAGMA integrity_check` against every staged snapshot. All
+six checks passed before archive and again after the real restore.
 
 ## 4. The encryption-key dependency
 
@@ -142,8 +144,10 @@ That timing is the whole argument for auditing state before designing a backup:
 the same discovery made during an outage is an unrecoverable outage.
 
 Handling constraint: the key must never be printed, logged, or echoed — during
-backup, restore, or the restore *test*. How to verify a restored key works
-without ever displaying it is an explicit open item.
+backup, restore, or a restore test. The real restore verified that the config
+file containing it returned with the database, without displaying its value.
+Application-level credential use remains an acceptance criterion for the future
+full-host rebuild drill.
 
 ## 5. Inventory
 
@@ -151,14 +155,18 @@ A privileged, read-only inventory pass produced a path-level list of everything
 that must survive host loss, with each path classified by recovery value. It is
 marked **complete for the current plan** — not complete in the absolute sense.
 
-Its own recorded limits:
+Its remaining recorded limits:
 
 - which sysctl drop-ins are operator-authored versus OS defaults is not fully
   separated;
 - whether one stray proxy config backup file is needed is undetermined;
-- whether the landing-page content has an off-host source of record is
-  unconfirmed;
-- off-host custody of the backup credentials is undecided.
+- the role of provider-side snapshots in the recovery policy remains
+  undecided.
+
+The landing page now has an authoritative off-host source in this repository's
+`site/` directory, so deployed HTML is reproducible configuration rather than
+backup-managed state. Off-host custody of the backup credentials is also
+confirmed.
 
 The inventory has a **re-run trigger**: any new stack, volume change, or custom
 systemd unit invalidates it. An inventory without a trigger becomes fiction on
@@ -169,21 +177,38 @@ explicitly flagged as unverifiable — it had been denied access to Docker, the
 stack directory, and the named volumes, and said so. Naming the gaps rather than
 guessing at them is what made the later pass targeted.
 
-## 6. Remaining work
+## 6. Implemented automation
+
+The running pipeline uses a root-only ephemeral staging directory and removes
+it after every run. A systemd oneshot service and persistent timer run the
+backup daily at approximately 03:30 local time. Backup and maintenance share a
+lock so they cannot overlap.
+
+Retention keeps 7 daily, 4 weekly, and 6 monthly snapshots. Weekly maintenance
+runs pruning plus a full repository integrity check. The final recorded
+repository check completed without errors.
+
+## 7. Validation and remaining work
 
 | Item | Status |
 | --- | --- |
-| Choose and test a consistency mechanism per SQLite consumer | **In progress** |
-| Restic repository layout and B2 bucket policy | **Planned** |
-| Scheduling, locking, retry, and failure alerting | **Planned** |
-| Retention and pruning policy | **Planned** |
-| Integrity checks and restore-test cadence | **Planned** |
-| RTO / RPO targets | **Undefined** |
-| Off-host custody of repository password and B2 credentials | **Undecided** |
-| Verify the restored encryption key without printing it | **Open** |
-| **A real restore test** | **Not performed** |
+| SQLite consistency mechanism, six databases | **Validated** |
+| Restic repository and private B2 storage | **Operational** |
+| Daily scheduling and non-overlapping maintenance | **Operational** |
+| Retention: 7 daily / 4 weekly / 6 monthly | **Operational** |
+| Integrity checks before archive and after restore | **Validated** |
+| Off-host custody of repository password and B2 credentials | **Confirmed** |
+| Real off-site data restore | **Validated** |
+| External backup-failure alerting | **Planned** |
+| Full-VPS rebuild and measured RTO | **Not performed** |
+| Provider snapshot role | **Undecided** |
 
-## 7. Non-negotiables
+The completed restore recovered all six SQLite databases and the critical
+recovery files, including the automation platform's encryption-key file. This
+proves the data-recovery path; it does not prove a provision-to-operational
+replacement-host rebuild.
+
+## 8. Non-negotiables
 
 - Never expose repository or storage credentials in Git, command output, logs,
   or documentation.
@@ -191,5 +216,6 @@ guessing at them is what made the later pass targeted.
   approval.
 - Never infer SQLite consistency from a successful file copy — a copy that
   completes without error tells you nothing about whether the result opens.
-- **A backup system is not complete until a restore has been tested.** Until
-  then it is an unproven hypothesis with a cron schedule.
+- **A backup system is not complete until a restore has been tested.** That bar
+  is met for the off-site data set; full-system Disaster Recovery remains a
+  separate, open test.
